@@ -277,14 +277,29 @@
 
     buildComparePicker();
     wireEvents();
+    switchView("dashboard");
     await loadDashboard();
     $("#last-updated").textContent =
       `Actualizado ${fmtDateTime.format(new Date())}`;
   }
 
   function wireEvents() {
-    document.querySelectorAll(".tab").forEach((tab) => {
-      tab.addEventListener("click", () => switchView(tab.dataset.view));
+    document.querySelectorAll(".nav-item").forEach((item) => {
+      item.addEventListener("click", () => switchView(item.dataset.view));
+    });
+
+    // grupos colapsables del sidebar
+    document.querySelectorAll(".nav-group-head").forEach((head) => {
+      head.addEventListener("click", () => head.parentElement.classList.toggle("open"));
+    });
+
+    // hamburguesa: contrae el sidebar (en móvil lo abre como panel flotante)
+    $("#menu-toggle").addEventListener("click", () => {
+      if (window.matchMedia("(max-width: 860px)").matches) {
+        document.body.classList.toggle("nav-open");
+      } else {
+        document.body.classList.toggle("nav-collapsed");
+      }
     });
 
     $("#f-range").addEventListener("change", () => {
@@ -310,10 +325,13 @@
 
   function switchView(view) {
     state.view = view;
-    document.querySelectorAll(".tab").forEach((t) =>
+    document.querySelectorAll(".nav-item").forEach((t) =>
       t.classList.toggle("active", t.dataset.view === view));
+    document.querySelectorAll(".nav-group").forEach((g) =>
+      g.classList.toggle("current", !!g.querySelector(`.nav-item[data-view="${view}"]`)));
     document.querySelectorAll(".view").forEach((v) => { v.hidden = true; });
     $(`#view-${view === "alert-config" ? "alert-config" : view}`).hidden = false;
+    document.body.classList.remove("nav-open");
 
     if (view === "projects") loadProjects();
     if (view === "credentials") loadCredentials();

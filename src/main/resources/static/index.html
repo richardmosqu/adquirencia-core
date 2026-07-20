@@ -6,7 +6,7 @@
   <title>Core de Adquirencia · PagueloFacil</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Encode+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Encode+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/app.css">
   <link rel="icon" type="image/svg+xml"
         href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%236BBE22'/%3E%3Cpath d='M16 6a10 10 0 1 0 10 10h-5a5 5 0 1 1-5-5z' fill='%23fff'/%3E%3C/svg%3E">
@@ -14,60 +14,142 @@
 <body>
   <div class="app">
 
-    <header class="topbar">
-      <div class="brand">
-        <svg class="isotipo" viewBox="0 0 32 32" aria-hidden="true">
-          <circle cx="16" cy="16" r="14" fill="#6BBE22"/>
-          <path d="M16 6a10 10 0 1 0 10 10h-5a5 5 0 1 1-5-5z" fill="#ffffff"/>
-        </svg>
-        <div class="brand-text">
-          <span class="brand-name">PagueloFacil</span>
-          <span class="brand-sub">Core de Adquirencia</span>
-        </div>
+    <!-- ===================== SIDEBAR (izquierda) ===================== -->
+    <aside class="sidebar">
+      <div class="side-top">
+        <button id="menu-toggle" class="icon-btn" aria-label="Menú" title="Contraer menú">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
+        </button>
+        <a class="logo" href="#">
+          <span class="logo-text">PagueloFacil</span>
+          <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="14" fill="#6BBE22"/>
+            <path d="M16 6a10 10 0 1 0 10 10h-5a5 5 0 1 1-5-5z" fill="#ffffff"/>
+          </svg>
+        </a>
       </div>
-      <div class="topbar-right">
+
+      <div class="side-user">
+        <div class="avatar avatar-lg">RM</div>
+        <div class="user-name">Richard Mosqueda</div>
+      </div>
+
+      <nav class="side-nav">
+        <div class="nav-group open" data-group="monitoreo">
+          <button class="nav-group-head" type="button">
+            <span class="nav-ico">
+              <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 3h8v10H3V3zm10 0h8v6h-8V3zM3 15h8v6H3v-6zm10-4h8v10h-8V11z"/></svg>
+            </span>
+            <span class="nav-label">Monitoreo</span>
+            <svg class="chev" viewBox="0 0 24 24"><path fill="currentColor" d="M7.4 15.4 12 10.8l4.6 4.6L18 14 12 8l-6 6z"/></svg>
+          </button>
+          <div class="nav-sub">
+            <button class="nav-item active" data-view="dashboard">Dashboard</button>
+            <button class="nav-item" data-view="alert-config">Alertas</button>
+          </div>
+        </div>
+
+        <div class="nav-group open" data-group="administracion">
+          <button class="nav-group-head" type="button">
+            <span class="nav-ico">
+              <svg viewBox="0 0 24 24"><path fill="currentColor" d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.3 0-7 1.7-7 4v3h14v-3c0-2.3-3.7-4-7-4zm8.5-2.5a3 3 0 1 0-2.1-5.1 6 6 0 0 1 .1 5c.6.1 1.3.1 2 .1zM17 13.2c1.8.8 3 2 3 3.8v3h2v-3c0-1.7-2.3-3.1-5-3.8z"/></svg>
+            </span>
+            <span class="nav-label">Administración</span>
+            <svg class="chev" viewBox="0 0 24 24"><path fill="currentColor" d="M7.4 15.4 12 10.8l4.6 4.6L18 14 12 8l-6 6z"/></svg>
+          </button>
+          <div class="nav-sub">
+            <button class="nav-item" data-view="projects">Proyectos</button>
+            <button class="nav-item" data-view="credentials">Credenciales</button>
+            <button class="nav-item" data-view="points">Puntos de pago</button>
+          </div>
+        </div>
+
+        <div class="nav-group open" data-group="documentacion">
+          <button class="nav-group-head" type="button">
+            <span class="nav-ico">
+              <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 2h9l5 5v15H6V2zm8 1.5V8h4.5L14 3.5zM8 12h8v2H8v-2zm0 4h8v2H8v-2z"/></svg>
+            </span>
+            <span class="nav-label">Documentación</span>
+            <svg class="chev" viewBox="0 0 24 24"><path fill="currentColor" d="M7.4 15.4 12 10.8l4.6 4.6L18 14 12 8l-6 6z"/></svg>
+          </button>
+          <div class="nav-sub">
+            <button class="nav-item" data-view="documents">Documentos</button>
+          </div>
+        </div>
+      </nav>
+
+      <div class="side-bottom">
+        <button class="help-btn" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-13a3.5 3.5 0 0 0-3.5 3.5h2A1.5 1.5 0 1 1 13 12c-.8.6-2 1.3-2 3h2c0-1 .9-1.5 1.7-2.2A3.5 3.5 0 0 0 12 7zm-1 9.5h2v2h-2v-2z"/></svg>
+          Ayuda
+        </button>
+      </div>
+    </aside>
+
+    <!-- ===================== TOPBAR ===================== -->
+    <header class="topbar">
+      <div class="topbar-left">
         <span id="alert-pill" class="alert-pill" hidden>
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1.5 15 14H1L8 1.5zm-.75 4.5v4h1.5V6h-1.5zm0 5.25v1.5h1.5v-1.5h-1.5z"/></svg>
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M8 1.5 15 14H1L8 1.5zm-.75 4.5v4h1.5V6h-1.5zm0 5.25v1.5h1.5v-1.5h-1.5z"/></svg>
           <span id="alert-pill-count"></span>
         </span>
+      </div>
+      <div class="topbar-right">
         <span class="updated" id="last-updated"></span>
+        <span class="lang-pill">ES
+          <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>
+        </span>
+        <button class="icon-btn" title="Descargar" type="button">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M11 3h2v10.2l3.6-3.6L18 11l-6 6-6-6 1.4-1.4L11 13.2V3zM4 19h16v2H4v-2z"/></svg>
+        </button>
+        <span class="topbar-user">
+          <span class="avatar avatar-sm">RM</span>
+          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>
+        </span>
       </div>
     </header>
 
+    <!-- ===================== CONTENIDO ===================== -->
     <main class="content">
-      <!-- ===================== DASHBOARD ===================== -->
+      <!-- DASHBOARD -->
       <section id="view-dashboard" class="view">
-        <div class="filters" id="filters">
-          <div class="filter">
-            <label for="f-merchant">Comercio</label>
-            <select id="f-merchant">
-              <option value="">Todos los comercios</option>
-            </select>
+        <div class="panel">
+          <h1 class="panel-title">Dashboard de procesamiento</h1>
+          <div class="filters-head">
+            <h2 class="filters-title">Filtros de búsqueda</h2>
           </div>
-          <div class="filter">
-            <label for="f-range">Periodo</label>
-            <select id="f-range">
-              <option value="today">Hoy</option>
-              <option value="7">Últimos 7 días</option>
-              <option value="30" selected>Últimos 30 días</option>
-              <option value="90">Últimos 90 días</option>
-              <option value="mtd">Mes actual</option>
-              <option value="custom">Rango personalizado…</option>
-            </select>
-          </div>
-          <div class="filter" id="f-custom" hidden>
-            <label>Rango</label>
-            <div class="range-inputs">
-              <input type="date" id="f-from" aria-label="Desde">
-              <span>—</span>
-              <input type="date" id="f-to" aria-label="Hasta">
+          <div class="filters" id="filters">
+            <div class="filter">
+              <label for="f-merchant">Comercio</label>
+              <select id="f-merchant">
+                <option value="">Todos los comercios</option>
+              </select>
             </div>
-          </div>
-          <div class="filter">
-            <label for="f-service">Servicio</label>
-            <select id="f-service">
-              <option value="">Todos los servicios</option>
-            </select>
+            <div class="filter">
+              <label for="f-range">Periodo</label>
+              <select id="f-range">
+                <option value="today">Hoy</option>
+                <option value="7">Últimos 7 días</option>
+                <option value="30" selected>Últimos 30 días</option>
+                <option value="90">Últimos 90 días</option>
+                <option value="mtd">Mes actual</option>
+                <option value="custom">Rango personalizado…</option>
+              </select>
+            </div>
+            <div class="filter">
+              <label for="f-service">Servicio</label>
+              <select id="f-service">
+                <option value="">Todos los servicios</option>
+              </select>
+            </div>
+            <div class="filter" id="f-custom" hidden>
+              <label>Rango</label>
+              <div class="range-inputs">
+                <input type="date" id="f-from" aria-label="Desde">
+                <span>—</span>
+                <input type="date" id="f-to" aria-label="Hasta">
+              </div>
+            </div>
           </div>
         </div>
 
@@ -119,52 +201,62 @@
         </div>
       </section>
 
-      <!-- ===================== PROYECTOS ===================== -->
+      <!-- PROYECTOS -->
       <section id="view-projects" class="view" hidden>
-        <h1 class="view-title">Proyectos</h1>
-        <p class="view-sub">Iniciativas en curso del área de adquirencia, estado y responsables.</p>
+        <div class="panel">
+          <h1 class="panel-title">Proyectos</h1>
+          <p class="view-sub">Iniciativas en curso del área de adquirencia, estado y responsables.</p>
+        </div>
         <div class="project-grid" id="project-grid"></div>
       </section>
 
-      <!-- ===================== CREDENCIALES ===================== -->
+      <!-- CREDENCIALES -->
       <section id="view-credentials" class="view" hidden>
-        <h1 class="view-title">Credenciales / DBAs</h1>
-        <p class="view-sub">Inventario de credenciales por procesador y comercio, estado y reenvíos.</p>
-        <div class="table-toolbar">
-          <select id="cred-proc-filter">
-            <option value="">Todos los procesadores</option>
-            <option value="POWERTRANZ">PowerTranz</option>
-            <option value="EVERTEC">Evertec</option>
-          </select>
-          <select id="cred-status-filter">
-            <option value="">Todos los estados</option>
-            <option>Activa</option>
-            <option>Pendiente</option>
-            <option>Vencida</option>
-            <option>Error de configuración</option>
-          </select>
+        <div class="panel">
+          <h1 class="panel-title">Credenciales / DBAs</h1>
+          <p class="view-sub">Inventario de credenciales por procesador y comercio, estado y reenvíos.</p>
+          <div class="table-toolbar">
+            <select id="cred-proc-filter">
+              <option value="">Todos los procesadores</option>
+              <option value="POWERTRANZ">PowerTranz</option>
+              <option value="EVERTEC">Evertec</option>
+            </select>
+            <select id="cred-status-filter">
+              <option value="">Todos los estados</option>
+              <option>Activa</option>
+              <option>Pendiente</option>
+              <option>Vencida</option>
+              <option>Error de configuración</option>
+            </select>
+          </div>
+          <div id="credentials-table"></div>
         </div>
-        <div id="credentials-table"></div>
       </section>
 
-      <!-- ===================== PUNTOS DE PAGO ===================== -->
+      <!-- PUNTOS DE PAGO -->
       <section id="view-points" class="view" hidden>
-        <h1 class="view-title">Puntos de pago</h1>
-        <p class="view-sub">POS y dispositivos por comercio y banco (Towerbank, BAC), estado y gestión.</p>
-        <div id="points-table"></div>
+        <div class="panel">
+          <h1 class="panel-title">Puntos de pago</h1>
+          <p class="view-sub">POS y dispositivos por comercio y banco (Towerbank, BAC), estado y gestión.</p>
+          <div id="points-table"></div>
+        </div>
       </section>
 
-      <!-- ===================== DOCUMENTOS ===================== -->
+      <!-- DOCUMENTOS -->
       <section id="view-documents" class="view" hidden>
-        <h1 class="view-title">Documentos</h1>
-        <p class="view-sub">Documentación del área: códigos de rechazo, guías por procesador, procedimientos.</p>
+        <div class="panel">
+          <h1 class="panel-title">Documentos</h1>
+          <p class="view-sub">Documentación del área: códigos de rechazo, guías por procesador, procedimientos.</p>
+        </div>
         <div id="documents-grid"></div>
       </section>
 
-      <!-- ===================== ALERTAS (CONFIG) ===================== -->
+      <!-- ALERTAS (CONFIG) -->
       <section id="view-alert-config" class="view" hidden>
-        <h1 class="view-title">Configuración de alertas</h1>
-        <p class="view-sub">Reglas estándar (aplican por defecto a todo el procesamiento) y reglas por comercio.</p>
+        <div class="panel">
+          <h1 class="panel-title">Configuración de alertas</h1>
+          <p class="view-sub">Reglas estándar (aplican por defecto a todo el procesamiento) y reglas por comercio.</p>
+        </div>
 
         <div class="rules-layout">
           <div>
@@ -201,34 +293,6 @@
         </div>
       </section>
     </main>
-
-    <!-- Barra de tabs a la derecha (según propuesta) -->
-    <nav class="tabrail" aria-label="Módulos">
-      <button class="tab active" data-view="dashboard" title="Dashboard">
-        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 3h8v10H3V3zm10 0h8v6h-8V3zM3 15h8v6H3v-6zm10-4h8v10h-8V11z"/></svg>
-        <span>Dashboard</span>
-      </button>
-      <button class="tab" data-view="projects" title="Proyectos">
-        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 5h7l2 2h7v12H4V5zm2 4v8h12V9H6z"/></svg>
-        <span>Proyectos</span>
-      </button>
-      <button class="tab" data-view="credentials" title="Credenciales / DBAs">
-        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M14 2a6 6 0 0 0-5.7 7.8L2 16v4h4v-2h2v-2h2l2.2-2.2A6 6 0 1 0 14 2zm2 5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z"/></svg>
-        <span>Credenciales</span>
-      </button>
-      <button class="tab" data-view="points" title="Puntos de pago">
-        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 4h16v12H4V4zm2 2v8h12V6H6zM2 18h20v2H2v-2z"/></svg>
-        <span>Puntos de pago</span>
-      </button>
-      <button class="tab" data-view="documents" title="Documentos">
-        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 2h9l5 5v15H6V2zm8 1.5V8h4.5L14 3.5zM8 12h8v2H8v-2zm0 4h8v2H8v-2z"/></svg>
-        <span>Documentos</span>
-      </button>
-      <button class="tab" data-view="alert-config" title="Alertas">
-        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7v4l-2 3v1h18v-1l-2-3V9a7 7 0 0 0-7-7zm-2 17a2 2 0 0 0 4 0h-4z"/></svg>
-        <span>Alertas</span>
-      </button>
-    </nav>
   </div>
 
   <div id="tooltip" class="tooltip" hidden></div>
