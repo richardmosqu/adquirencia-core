@@ -1123,6 +1123,14 @@ table.data a, .link, table.data .cell-link {
 }
 .kc-advance:hover { background: var(--green-200); }
 .kc-done { font-size: 11.5px; font-weight: 600; color: var(--pf-green-dark); margin-top: 2px; }
+.kc-cancelled { font-size: 11.5px; font-weight: 600; color: var(--status-critical-txt); margin-top: 2px; }
+.kanban-col-cancel { background: var(--status-critical-tint); }
+
+/* aviso de credencial cancelada en el detalle */
+.cancel-note {
+  font-size: 13.5px; color: var(--status-critical-txt);
+  background: var(--status-critical-tint); border-radius: var(--radius-sm); padding: 14px 16px;
+}
 
 /* ------------------ Stepper (detalle de credencial) ------------------ */
 
@@ -1178,7 +1186,7 @@ table.data a, .link, table.data .cell-link {
 .refund-banner.idle { background: var(--gray-200); color: var(--muted); }
 
 .cred-notas { margin-top: 14px; }
-.cred-notas p { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.cred-notas p { font-size: 13px; color: var(--ink-2); margin-top: 2px; white-space: pre-line; }
 
 /* ------------------ Modales ------------------ */
 
@@ -1199,7 +1207,13 @@ table.data a, .link, table.data .cell-link {
 .modal-close:hover { background: var(--gray-200); color: var(--ink); }
 .modal-body { padding: 20px 22px; overflow-y: auto; }
 .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid var(--line); }
-.obs-text { font-size: 14px; color: var(--ink); line-height: 1.6; }
+.obs-text { font-size: 14px; color: var(--ink); line-height: 1.6; white-space: pre-line; background: var(--gray-100); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.obs-add { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.obs-add textarea {
+  font-family: var(--font); font-size: 13.5px; padding: 10px 12px;
+  border: 1px solid var(--field-line); border-radius: 10px; background: var(--surface); color: var(--ink); resize: vertical;
+}
+.obs-add textarea:focus { outline: 2px solid var(--pf-green); outline-offset: 1px; }
 
 /* Campos copiables (Ver credenciales) */
 .ver-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }

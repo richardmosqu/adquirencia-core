@@ -1070,6 +1070,12 @@
     { key: "Aprobado por BAC", col: "Aprobado por BAC", kind: "good" },
     { key: "Habilitado/Configurado", col: "Habilitado", kind: "good" },
   ];
+  // Estado fuera del pipeline: el adquirente cancela las credenciales.
+  const CRED_CANCELLED = "Cancelado";
+  // Columnas del Kanban: el pipeline + una columna de canceladas al final.
+  const KANBAN_COLUMNS = [...CRED_STATUSES, { key: CRED_CANCELLED, col: "Cancelado", kind: "serious" }];
+  // Estados seleccionables (filtros y formulario).
+  const CRED_STATUS_KEYS = [...CRED_STATUSES.map((s) => s.key), CRED_CANCELLED];
   const CRED_BANKS = ["BAC", "Towerbank"];
   const CRED_BRANDS = [
     { key: "Mc", label: "Mastercard", short: "MC" },
@@ -1092,7 +1098,9 @@
   const COPY_ICON = '<svg viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>';
   const CHECK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>';
 
-  const statusMeta = (key) => CRED_STATUSES.find((s) => s.key === key) || { col: key, kind: "neutral" };
+  const statusMeta = (key) => (key === CRED_CANCELLED
+    ? { col: "Cancelado", kind: "serious" }
+    : (CRED_STATUSES.find((s) => s.key === key) || { col: key, kind: "neutral" }));
   const statusIndex = (key) => CRED_STATUSES.findIndex((s) => s.key === key);
   const credStatusChip = (key) => chip(statusMeta(key).col, statusMeta(key).kind);
   const procLabel = (p) => (p === "POWERTRANZ" ? "PowerTranz" : "Evertec");
@@ -1109,7 +1117,7 @@
   function populateCredFilters() {
     const st = $("#cred-status-filter"), bk = $("#cred-bank-filter"), me = $("#cred-merchant-filter");
     if (st.options.length <= 1) {
-      CRED_STATUSES.forEach((s) => st.append(new Option(s.key, s.key)));
+      CRED_STATUS_KEYS.forEach((k) => st.append(new Option(k, k)));
       CRED_BANKS.forEach((b) => bk.append(new Option(b, b)));
       state.merchants.forEach((m) => me.append(new Option(`${m.name} (${m.id})`, m.id)));
     }
@@ -1178,12 +1186,12 @@
   function renderCredKanban(list) {
     const el = $("#credentials-body");
     const byStatus = {};
-    CRED_STATUSES.forEach((s) => (byStatus[s.key] = []));
+    KANBAN_COLUMNS.forEach((s) => (byStatus[s.key] = []));
     list.forEach((c) => (byStatus[c.status] || (byStatus[c.status] = [])).push(c));
 
     el.innerHTML = `<div class="kanban">
-      ${CRED_STATUSES.map((s) => `
-        <div class="kanban-col">
+      ${KANBAN_COLUMNS.map((s) => `
+        <div class="kanban-col ${s.key === CRED_CANCELLED ? "kanban-col-cancel" : ""}">
           <div class="kanban-col-head">
             <span class="kc-title">${esc(s.col)}</span>
             <span class="kc-count">${byStatus[s.key].length}</span>
@@ -1199,13 +1207,17 @@
   function credCard(c) {
     const idx = statusIndex(c.status);
     const next = idx >= 0 && idx < CRED_STATUSES.length - 1 ? CRED_STATUSES[idx + 1] : null;
+    let footer;
+    if (c.status === CRED_CANCELLED) footer = '<span class="kc-cancelled">Cancelada</span>';
+    else if (next) footer = `<button class="btn btn-sm kc-advance" data-cred-advance="${esc(c.id)}" title="Mover a ${esc(next.col)}">Mover a ${esc(next.col)} →</button>`;
+    else footer = '<span class="kc-done">✓ Completado</span>';
     return `
       <div class="kanban-card" data-cred-detail="${esc(c.id)}">
         <div class="kc-merchant">${esc(merchantLabel(c.merchantId))}</div>
         <div class="kc-meta">${esc(c.bank || "—")} · ${esc(procLabel(c.processor))}</div>
         <div class="kc-meta kc-afiliado"><code>${esc(c.afiliado || "—")}</code></div>
         ${refundPending(c) ? '<div class="kc-flag">Reembolso pendiente</div>' : ""}
-        ${next ? `<button class="btn btn-sm kc-advance" data-cred-advance="${esc(c.id)}" title="Mover a ${esc(next.col)}">Mover a ${esc(next.col)} →</button>` : '<span class="kc-done">✓ Completado</span>'}
+        ${footer}
       </div>`;
   }
 
@@ -1221,19 +1233,39 @@
     root.querySelectorAll("[data-cred-obs]").forEach((b) =>
       b.addEventListener("click", (ev) => { ev.stopPropagation(); openObservaciones(credById(b.dataset.credObs)); }));
     root.querySelectorAll("[data-cred-advance]").forEach((b) =>
-      b.addEventListener("click", (ev) => { ev.stopPropagation(); advanceCred(credById(b.dataset.credAdvance)); }));
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); advanceCred(b.dataset.credAdvance); }));
   }
 
   const credById = (id) => state.credentials.find((c) => c.id === id);
 
   // ---- persistencia ----
-  async function putCred(c) {
-    const updated = await api(`/api/credentials/${encodeURIComponent(c.id)}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c),
+  // Las escrituras se serializan para que no se pisen entre sí (p. ej. anotar
+  // un código de operación y a la vez cambiar el estado de la prueba).
+  let credPutChain = Promise.resolve();
+  function putCred(c) {
+    credPutChain = credPutChain.then(async () => {
+      const updated = await api(`/api/credentials/${encodeURIComponent(c.id)}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c),
+      });
+      const i = state.credentials.findIndex((x) => x.id === c.id);
+      if (i >= 0) state.credentials[i] = updated;
+      return updated;
     });
-    const i = state.credentials.findIndex((x) => x.id === c.id);
-    if (i >= 0) state.credentials[i] = updated;
-    return updated;
+    return credPutChain;
+  }
+
+  // Credencial más reciente + lo que el usuario tenga escrito en los códigos de
+  // operación del detalle (aunque aún no haya guardado), para no perder nada.
+  function credWithEdits(id) {
+    const base = credById(id);
+    if (!base) return null;
+    const c = { ...base };
+    if (state.credDetailId === id) {
+      document.querySelectorAll("#cred-detail [data-opcode]").forEach((inp) => {
+        c["codigoOperacion" + inp.dataset.opcode] = opFull(inp.value);
+      });
+    }
+    return c;
   }
 
   function refreshCredViews(id) {
@@ -1244,29 +1276,38 @@
     }
   }
 
-  async function advanceCred(c) {
+  async function advanceCred(id) {
+    const c = credWithEdits(id);
+    if (!c) return;
     const idx = statusIndex(c.status);
     if (idx < 0 || idx >= CRED_STATUSES.length - 1) return;
-    const next = { ...c, status: CRED_STATUSES[idx + 1].key };
-    if (next.status === "Aprobado por BAC") next.aprobadoPorBac = true;
-    if (next.status === "Habilitado/Configurado" && !next.fechaMigracion) next.fechaMigracion = isoToday();
-    await putCred(next);
-    refreshCredViews(c.id);
+    c.status = CRED_STATUSES[idx + 1].key;
+    if (c.status === "Aprobado por BAC") c.aprobadoPorBac = true;
+    if (c.status === "Habilitado/Configurado" && !c.fechaMigracion) c.fechaMigracion = isoToday();
+    await putCred(c);
+    refreshCredViews(id);
   }
 
-  async function setBrandTest(c, brandKey, result) {
-    const next = { ...c, ["prueba" + brandKey]: result };
-    await putCred(next);
-    refreshCredViews(c.id);
+  async function setBrandTest(id, brandKey, result) {
+    const c = credWithEdits(id);
+    if (!c) return;
+    c["prueba" + brandKey] = result;
+    await putCred(c);
+    refreshCredViews(id);
   }
 
-  async function setRefunds(c, done) {
-    await putCred({ ...c, reembolsosPruebas: done });
-    refreshCredViews(c.id);
+  async function setRefunds(id, done) {
+    const c = credWithEdits(id);
+    if (!c) return;
+    c.reembolsosPruebas = done;
+    await putCred(c);
+    refreshCredViews(id);
   }
 
-  async function saveOpCode(c, brandKey, value) {
-    await putCred({ ...c, ["codigoOperacion" + brandKey]: value });
+  // Guarda los códigos de operación tal cual están en el detalle (sin re-render).
+  function saveOpCodes(id) {
+    const c = credWithEdits(id);
+    if (c) putCred(c);
   }
 
   // ---- popups ----
@@ -1308,12 +1349,26 @@
   function openObservaciones(c) {
     if (!c) return;
     const obs = c.observaciones && c.observaciones.trim();
-    openModal(`Observaciones · ${esc(merchantLabel(c.merchantId))}`,
-      obs ? `<p class="obs-text">${esc(obs)}</p>`
-          : '<div class="empty">Sin observaciones para esta credencial todavía.</div>',
+    const body = `
+      ${obs ? `<p class="obs-text">${esc(obs)}</p>`
+            : '<div class="empty">Sin observaciones para esta credencial todavía.</div>'}
+      <label class="obs-add">Anotar observación
+        <textarea id="obs-new" rows="3" placeholder="Escribe una nueva observación…"></textarea>
+      </label>`;
+    openModal(`Observaciones · ${esc(merchantLabel(c.merchantId))}`, body,
       `<button class="btn" data-modal-close>Cerrar</button>
-       <button class="btn btn-primary" id="obs-edit">Editar</button>`);
-    $("#obs-edit").addEventListener("click", () => { closeModal(); openCredForm(c); });
+       <button class="btn btn-primary" id="obs-save">Guardar observación</button>`);
+    $("#obs-save").addEventListener("click", async () => {
+      const t = $("#obs-new").value.trim();
+      if (!t) { $("#obs-new").focus(); return; }
+      const cur = credById(c.id);
+      const prev = cur.observaciones && cur.observaciones.trim();
+      const merged = prev ? `${prev}\n${t}` : t;
+      await putCred({ ...cur, observaciones: merged });
+      refreshCredViews(c.id);
+      openObservaciones(credById(c.id)); // reabre con la nota agregada y el campo limpio
+    });
+    $("#obs-new").focus();
   }
 
   // ---- formulario crear / editar ----
@@ -1331,7 +1386,7 @@
           <label>Procesador<select id="cf-proc">${opt(["POWERTRANZ", "EVERTEC"], c.processor)}</select></label>
           <label>Afiliado<input id="cf-afiliado" value="${esc(c.afiliado || "")}"></label>
           <label>Fecha de solicitud<input type="date" id="cf-solicitud" value="${esc(c.fechaSolicitud || "")}"></label>
-          <label>Estado<select id="cf-status">${CRED_STATUSES.map((s) => `<option value="${esc(s.key)}" ${s.key === c.status ? "selected" : ""}>${esc(s.key)}</option>`).join("")}</select></label>
+          <label>Estado<select id="cf-status">${CRED_STATUS_KEYS.map((k) => `<option value="${esc(k)}" ${k === c.status ? "selected" : ""}>${esc(k)}</option>`).join("")}</select></label>
           <label class="cf-check"><input type="checkbox" id="cf-rebill" ${c.rebill ? "checked" : ""}> Rebill</label>
           <label class="cf-check"><input type="checkbox" id="cf-3ds" ${c.threeDs ? "checked" : ""}> 3DS</label>
 
@@ -1472,9 +1527,11 @@
       <div class="dash-block" style="margin-top:22px">
         <div class="block-label">Ciclo de vida</div>
         <div class="card">
-          ${stepper}
+          ${c.status === CRED_CANCELLED ? `
+            <div class="cancel-note">Esta credencial fue <b>cancelada por el adquirente</b>. Para retomarla, edítala y cámbiale el estado.</div>`
+          : `${stepper}
           ${next ? `<div class="stepper-action"><button class="btn btn-primary" id="cred-advance">Avanzar a: ${esc(next.col)} →</button></div>`
-            : '<div class="stepper-action"><span class="chip good">✓ Habilitada y configurada</span></div>'}
+            : '<div class="stepper-action"><span class="chip good">✓ Habilitada y configurada</span></div>'}`}
         </div>
       </div>
 
@@ -1510,16 +1567,16 @@
         </div>
       </div>`;
 
-    $("#cred-back").addEventListener("click", () => { state.credDetailId = null; switchView("credentials"); });
-    $("#cred-ver").addEventListener("click", () => openVerCredenciales(c));
-    $("#cred-edit").addEventListener("click", () => openCredForm(c));
-    if (next) $("#cred-advance").addEventListener("click", () => advanceCred(c));
-    const rd = $("#cred-refund-done"); if (rd) rd.addEventListener("click", () => setRefunds(c, true));
-    const ru = $("#cred-refund-undo"); if (ru) ru.addEventListener("click", () => setRefunds(c, false));
+    $("#cred-back").addEventListener("click", () => { saveOpCodes(c.id); state.credDetailId = null; switchView("credentials"); });
+    $("#cred-ver").addEventListener("click", () => openVerCredenciales(credById(c.id)));
+    $("#cred-edit").addEventListener("click", () => openCredForm(credById(c.id)));
+    const adv = $("#cred-advance"); if (adv) adv.addEventListener("click", () => advanceCred(c.id));
+    const rd = $("#cred-refund-done"); if (rd) rd.addEventListener("click", () => setRefunds(c.id, true));
+    const ru = $("#cred-refund-undo"); if (ru) ru.addEventListener("click", () => setRefunds(c.id, false));
     el.querySelectorAll("[data-brand]").forEach((b) =>
-      b.addEventListener("click", () => setBrandTest(c, b.dataset.brand, b.dataset.result)));
+      b.addEventListener("click", () => setBrandTest(c.id, b.dataset.brand, b.dataset.result)));
     el.querySelectorAll("[data-opcode]").forEach((inp) =>
-      inp.addEventListener("change", () => saveOpCode(c, inp.dataset.opcode, opFull(inp.value))));
+      inp.addEventListener("change", () => saveOpCodes(c.id)));
   }
 
   // ---------- modales ----------
