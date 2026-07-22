@@ -1,5 +1,6 @@
 package com.paguelofacil.adquirencia.web;
 
+import com.paguelofacil.adquirencia.domain.ActionPlan;
 import com.paguelofacil.adquirencia.domain.Alert;
 import com.paguelofacil.adquirencia.domain.AlertRule;
 import com.paguelofacil.adquirencia.service.AlertService;
@@ -31,9 +32,33 @@ public class AlertController {
         return alertService.activeAlerts();
     }
 
+    @GetMapping("/alerts/{id}")
+    public ResponseEntity<AlertService.AlertDetail> detail(@PathVariable String id) {
+        return alertService.detail(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @PostMapping("/alerts/{id}/ack")
     public Map<String, Object> acknowledge(@PathVariable String id) {
         return Map.of("acknowledged", alertService.acknowledge(id));
+    }
+
+    @GetMapping("/action-plans")
+    public List<ActionPlan> actionPlans() {
+        return alertService.actionPlans();
+    }
+
+    @PostMapping("/action-plans")
+    public ActionPlan createActionPlan(@RequestBody ActionPlan plan) {
+        return alertService.createActionPlan(plan);
+    }
+
+    @DeleteMapping("/action-plans/{id}")
+    public ResponseEntity<Void> deleteActionPlan(@PathVariable String id) {
+        return alertService.deleteActionPlan(id)
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.status(409).build();
     }
 
     @GetMapping("/alert-rules")

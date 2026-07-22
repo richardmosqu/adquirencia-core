@@ -14,6 +14,14 @@
   const cssVar = (name) => rootStyle.getPropertyValue(name).trim();
 
   const SERIES = ["--series-1", "--series-2", "--series-3", "--series-4"].map(cssVar);
+  // Colores de marca para los canales (donut): verde primario y teal del manual.
+  const CHANNEL_COLOR = {
+    POWERTRANZ: cssVar("--green-500"),
+    EVERTEC: cssVar("--teal-700"),
+  };
+  // Paleta categórica de marca para el donut de servicios (verdes + teal + ámbar).
+  const SERVICE_COLORS = ["--green-500", "--teal-500", "--amber-500", "--green-800", "--teal-700"].map(cssVar);
+  const THREEDS_COLORS = ["--green-500", "--teal-700"].map(cssVar);
   const CHART = {
     grid: cssVar("--grid"),
     axis: cssVar("--axis-text"),
@@ -45,6 +53,8 @@
     merchants: [],
     drCodes: {},
     compareSelection: [],
+    alerts: [],
+    actionPlans: [],
     view: "dashboard",
   };
 
@@ -78,6 +88,13 @@
   function merchantName(id) {
     const m = state.merchants.find((x) => x.id === id);
     return m ? m.name : id ?? "—";
+  }
+
+  // Todo comercio se muestra como "Nombre (ID)". Los canales NO usan este formato.
+  const nameId = (name, id) => (id ? `${name} (${id})` : (name ?? "—"));
+  function merchantLabel(id) {
+    const m = state.merchants.find((x) => x.id === id);
+    return m ? `${m.name} (${m.id})` : (id ?? "—");
   }
 
   // ---------- tooltip ----------
@@ -274,13 +291,13 @@
     state.drCodes = drCodes;
 
     const mSel = $("#f-merchant");
-    merchants.forEach((m) => mSel.append(new Option(m.name, m.id)));
+    merchants.forEach((m) => mSel.append(new Option(`${m.name} (${m.id})`, m.id)));
 
     const sSel = $("#f-service");
     SERVICES.forEach((s) => sSel.append(new Option(s.label, s.value)));
 
     const rSel = $("#r-merchant");
-    merchants.forEach((m) => rSel.append(new Option(m.name, m.id)));
+    merchants.forEach((m) => rSel.append(new Option(`${m.name} (${m.id})`, m.id)));
 
     const cSel = $("#r-condition");
     CONDITIONS.forEach((c) => cSel.append(new Option(c.label, c.value)));
@@ -288,12 +305,15 @@
     const dSel = $("#r-drcode");
     Object.entries(drCodes).forEach(([code, desc]) => dSel.append(new Option(`${code} — ${desc}`, code)));
 
-    buildComparePicker();
+    setupCompare();
     wireEvents();
     switchView("dashboard");
     await loadDashboard();
     $("#last-updated").textContent =
       `Actualizado ${fmtDateTime.format(new Date())}`;
+    // deep-link opcional: #alert=<id> abre el detalle; #<vista> abre esa vista
+    handleHash();
+    window.addEventListener("hashchange", handleHash);
   }
 
   function wireEvents() {
@@ -302,10 +322,10 @@
       item.addEventListener("click", () => switchView(item.dataset.view));
     });
 
-    // la píldora de alertas del topbar lleva a la vista de alertas
+    // la píldora de alertas del topbar abre el panel y despliega la alerta top
     $("#alert-pill").addEventListener("click", (ev) => {
       ev.preventDefault();
-      switchView("alert-config");
+      openTopAlert();
     });
 
     $("#f-range").addEventListener("change", () => {
@@ -324,6 +344,7 @@
       $("#r-drcode-wrap").hidden = $("#r-condition").value !== "DR_CODE_RECURRENT";
     });
     $("#rule-form").addEventListener("submit", onCreateRule);
+    $("#ap-form").addEventListener("submit", onCreatePlan);
 
     $("#cred-proc-filter").addEventListener("change", renderCredentials);
     $("#cred-status-filter").addEventListener("change", renderCredentials);
@@ -347,7 +368,28 @@
     if (view === "points") loadPoints();
     if (view === "documents") loadDocuments();
     if (view === "profitability") loadProfitability();
-    if (view === "alert-config") loadRules();
+    if (view === "alert-config") loadRulesAndPlans();
+  }
+
+  const KNOWN_VIEWS = ["dashboard", "alert-config", "profitability", "projects", "credentials", "points", "documents"];
+
+  // Deep-link por hash: #alert=<id> abre el detalle; #<vista> abre la vista.
+  function handleHash() {
+    const h = (location.hash || "").replace(/^#/, "");
+    if (!h) return;
+    if (h.startsWith("alert=")) { loadAlertDetail(decodeURIComponent(h.slice(6))); return; }
+    if (KNOWN_VIEWS.includes(h)) switchView(h);
+  }
+
+  // Abre el dashboard y despliega el detalle inline de la alerta más importante.
+  function openTopAlert() {
+    const active = state.alerts.filter((a) => !a.acknowledged);
+    switchView("dashboard");
+    setTimeout(() => {
+      const card = $("#alert-list") && $("#alert-list").closest(".card");
+      if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (active.length) expandAlert(active[0].id);
+    }, 60);
   }
 
   // ---------- filtros ----------
@@ -386,7 +428,9 @@
       api(`/api/dashboard/summary?${filterParams()}`),
       api("/api/alerts"),
     ]);
+    state.alerts = alerts;
     renderKpis(summary, alerts);
+    renderAlertBanner(alerts);
     renderAlerts(alerts);
     lineChart($("#chart-volume"), summary.daily);
     $("#volume-range-label").textContent =
@@ -450,6 +494,60 @@
     }
   }
 
+  // ícono de "ubicación / comercio" para señalar dónde ocurre la alerta
+  const WHERE_ICON = '<svg viewBox="0 0 16 16"><path fill="currentColor" d="M8 1.5a4.5 4.5 0 0 0-4.5 4.5c0 3.3 4.5 8.5 4.5 8.5s4.5-5.2 4.5-8.5A4.5 4.5 0 0 0 8 1.5zm0 6.2A1.7 1.7 0 1 1 8 4.3a1.7 1.7 0 0 1 0 3.4z"/></svg>';
+
+  // Señala claramente el comercio/canal donde ocurre la alerta.
+  function alertWhere(a) {
+    if (a.merchantName) return `<span class="alert-where">${WHERE_ICON}Comercio: <b>${esc(nameId(a.merchantName, a.merchantId))}</b></span>`;
+    if (a.processor) {
+      const label = a.processor === "POWERTRANZ" ? "PowerTranz" : a.processor === "EVERTEC" ? "Evertec" : a.processor;
+      return `<span class="alert-where">${WHERE_ICON}Canal: <b>${esc(label)}</b></span>`;
+    }
+    return `<span class="alert-where">${WHERE_ICON}Alcance: <b>Todos los comercios</b></span>`;
+  }
+
+  // Banner ancho arriba de los KPIs: comunica que hay una alerta por revisar.
+  function renderAlertBanner(alerts) {
+    const el = $("#alert-banner");
+    const active = alerts.filter((a) => !a.acknowledged);
+    if (!active.length) {
+      el.className = "alert-banner sev-good";
+      el.innerHTML = `
+        <div class="ab-ico">${CHIP_ICONS.good}</div>
+        <div class="ab-body">
+          <div class="ab-kicker">Todo en orden</div>
+          <div class="ab-msg">No hay alertas activas ahora mismo. Seguimos monitoreando tu procesamiento por ti.</div>
+        </div>`;
+      return;
+    }
+    // el backend ya ordena por severidad desc: la primera es la más importante
+    const top = active[0];
+    const critical = active.filter((a) => a.severity === "CRITICAL").length;
+    const sev = SEVERITY_CLASS[top.severity];
+    const where = top.merchantName
+      ? ` en <b>${esc(nameId(top.merchantName, top.merchantId))}</b>`
+      : (top.processor ? ` en el canal <b>${esc(top.processor === "POWERTRANZ" ? "PowerTranz" : "Evertec")}</b>` : "");
+    el.className = `alert-banner sev-${sev}`;
+    el.innerHTML = `
+      <div class="ab-ico">${CHIP_ICONS[sev]}</div>
+      <div class="ab-body">
+        <div class="ab-kicker">${active.length} alerta${active.length !== 1 ? "s" : ""} por revisar${critical ? ` · ${critical} crítica${critical > 1 ? "s" : ""}` : ""}</div>
+        <div class="ab-msg"><b>${esc(top.ruleName)}</b>${where} — ${esc(top.message)}</div>
+      </div>
+      <button class="btn btn-primary" id="ab-review">Revisar</button>`;
+
+    $("#ab-review").addEventListener("click", () => {
+      const card = $("#alert-list").closest(".card");
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      const first = $("#alert-list").querySelector(".alert-item");
+      if (first) {
+        first.classList.add("flash");
+        setTimeout(() => first.classList.remove("flash"), 1600);
+      }
+    });
+  }
+
   function renderAlerts(alerts) {
     const el = $("#alert-list");
     if (!alerts.length) {
@@ -457,70 +555,314 @@
       return;
     }
     el.innerHTML = alerts.map((a) => `
-      <div class="alert-item ${SEVERITY_CLASS[a.severity]} ${a.acknowledged ? "acked" : ""}">
-        <div class="alert-body">
-          <div class="alert-title">${chip(SEVERITY_LABEL[a.severity], SEVERITY_CLASS[a.severity])} ${esc(a.ruleName)}</div>
-          <div class="alert-msg">${esc(a.message)}</div>
-          <div class="alert-meta">${a.merchantName ? esc(a.merchantName) + " · " : ""}${a.processor ? esc(a.processor) + " · " : ""}hoy</div>
+      <div class="alert-item ${SEVERITY_CLASS[a.severity]} ${a.acknowledged ? "acked" : ""}" data-alert-id="${esc(a.id)}">
+        <div class="alert-head" data-toggle-alert="${esc(a.id)}" role="button" tabindex="0" aria-expanded="false">
+          <div class="alert-body">
+            <div class="alert-title">${chip(SEVERITY_LABEL[a.severity], SEVERITY_CLASS[a.severity])} ${esc(a.ruleName)}
+              <svg class="alert-caret" viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M4 6l4 4 4-4z"/></svg></div>
+            <div class="alert-msg">${esc(a.message)}</div>
+            <div>${alertWhere(a)}</div>
+          </div>
+          ${a.acknowledged ? '<span class="chip good" style="align-self:flex-start">Atendida</span>'
+            : `<button class="btn btn-ghost" data-ack="${esc(a.id)}">OK</button>`}
         </div>
-        ${a.acknowledged ? "" : `<button class="btn btn-ghost" data-ack="${esc(a.id)}">OK</button>`}
+        <div class="alert-drop" hidden>
+          <div class="alert-drop-grid">
+            <div><span class="adg-k">Comercio afectado</span><span class="adg-v">${a.merchantName ? esc(nameId(a.merchantName, a.merchantId)) : (a.processor ? "Canal " + esc(a.processor === "POWERTRANZ" ? "PowerTranz" : "Evertec") : "Todos los comercios")}</span></div>
+            <div><span class="adg-k">Severidad</span><span class="adg-v">${esc(SEVERITY_LABEL[a.severity])}</span></div>
+            <div><span class="adg-k">Plan de acción</span><span class="adg-v">${a.actionPlanName ? esc(a.actionPlanName) : "—"}</span></div>
+          </div>
+          <button class="btn btn-primary btn-sm" data-detail="${esc(a.id)}">Ver detalles →</button>
+        </div>
       </div>`).join("");
 
+    el.querySelectorAll("[data-toggle-alert]").forEach((row) => {
+      const toggle = (ev) => {
+        if (ev.target.closest("[data-ack]")) return; // el botón OK no despliega
+        expandAlert(row.dataset.toggleAlert, true);
+      };
+      row.addEventListener("click", toggle);
+      row.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(ev); } });
+    });
+
+    el.querySelectorAll("[data-detail]").forEach((btn) => {
+      btn.addEventListener("click", (ev) => { ev.stopPropagation(); loadAlertDetail(btn.dataset.detail); });
+    });
+
     el.querySelectorAll("[data-ack]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
+      btn.addEventListener("click", async (ev) => {
+        ev.stopPropagation();
         await api(`/api/alerts/${encodeURIComponent(btn.dataset.ack)}/ack`, { method: "POST" });
         loadDashboard();
       });
     });
   }
 
+  // Despliega/pliega el dropdown de una alerta en el panel.
+  function expandAlert(id, toggle) {
+    const item = document.querySelector(`.alert-item[data-alert-id="${CSS.escape(id)}"]`);
+    if (!item) return;
+    const drop = item.querySelector(".alert-drop");
+    const head = item.querySelector(".alert-head");
+    const open = toggle ? drop.hidden : true;
+    drop.hidden = !open;
+    item.classList.toggle("open", open);
+    if (head) head.setAttribute("aria-expanded", String(open));
+  }
+
+  // ---------- página de detalle de alerta ----------
+
+  async function loadAlertDetail(id) {
+    let d;
+    try {
+      d = await api(`/api/alerts/${encodeURIComponent(id)}`);
+    } catch (err) {
+      d = null;
+    }
+    renderAlertDetail(d);
+    switchView("alert-detail");
+  }
+
+  function detailField(label, value) {
+    return `<div class="ad-field"><div class="ad-k">${esc(label)}</div><div class="ad-v">${value}</div></div>`;
+  }
+
+  function renderAlertDetail(d) {
+    const el = $("#alert-detail");
+    if (!d) {
+      el.innerHTML = `
+        <div class="panel">
+          <button class="btn" id="ad-back">← Volver</button>
+          <div class="empty" style="margin-top:16px">Esta alerta ya no está activa. Puede que se haya atendido o que la condición se haya normalizado. ¡Buena señal!</div>
+        </div>`;
+      $("#ad-back").addEventListener("click", () => switchView("dashboard"));
+      return;
+    }
+    const a = d.alert;
+    const sev = SEVERITY_CLASS[a.severity];
+    const plan = d.actionPlan;
+
+    el.innerHTML = `
+      <div class="ad-top">
+        <button class="btn" id="ad-back">← Volver</button>
+      </div>
+      <div class="card ad-header sev-${sev}">
+        <div class="ad-header-main">
+          <div class="ad-kicker">${chip(SEVERITY_LABEL[a.severity], sev)} Detalle de alerta</div>
+          <h1 class="ad-title">${esc(a.ruleName)}</h1>
+          <p class="ad-msg">${esc(a.message)}</p>
+        </div>
+        ${a.acknowledged ? '<span class="chip good">Atendida</span>'
+          : `<button class="btn btn-primary" id="ad-ack">Marcar como atendida</button>`}
+      </div>
+
+      <div class="dash-block" style="margin-top:22px">
+        <div class="block-label">Información de la alerta</div>
+        <div class="card">
+          <div class="ad-grid">
+            ${detailField("Hora", esc(fmtDateTime.format(new Date(a.triggeredAt))))}
+            ${detailField("Código de operación", `<code>${esc(d.operationCode)}</code>`)}
+            ${detailField("Tarjeta", `${esc(d.cardBrand)} · <code>${esc(d.cardMask)}</code>`)}
+            ${detailField("Volumen procesado", `<b>${moneyC(d.processedVolume)}</b>`)}
+            ${detailField("Magnitud del problema", `<b class="sig-bad">${esc(d.magnitudeText)}</b>`)}
+            ${detailField("Comercio afectado", `<b>${esc(a.merchantName ? nameId(a.merchantName, a.merchantId) : d.scopeLabel)}</b>`)}
+            ${detailField("Condición evaluada", esc(d.conditionLabel))}
+            ${detailField(d.metric.label, `<b>${esc(fmtMetric(d.metric))}</b> · umbral ${esc(fmtNum(d.metric.threshold))}${esc(d.metric.unit)}`)}
+            ${detailField("Transacciones evaluadas (hoy)", `${int(d.txEvaluated)} · ${int(d.declinedCount)} rechazadas`)}
+            ${d.drCode ? detailField("Código DR", `<b>${esc(d.drCode)}</b> — ${esc(d.drDescription || "")}`) : ""}
+            ${detailField("Importe de la operación", d.sampleAmount != null ? moneyC(d.sampleAmount) : "—")}
+            ${detailField("Hora de la operación", esc(fmtDateTime.format(new Date(d.sampleTime))))}
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-block">
+        <div class="block-label">Plan de acción recomendado</div>
+        <div class="card ad-plan">
+          ${plan ? `
+            <h2 class="ad-plan-name">${PLAN_ICON}${esc(plan.name)}</h2>
+            <p class="ad-plan-desc">${esc(plan.description || "")}</p>
+            <ol class="ad-steps">${(plan.steps || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`
+          : '<div class="empty">Esta regla no tiene un plan de acción enlazado.</div>'}
+        </div>
+      </div>`;
+
+    $("#ad-back").addEventListener("click", () => switchView("dashboard"));
+    const ack = $("#ad-ack");
+    if (ack) {
+      ack.addEventListener("click", async () => {
+        await api(`/api/alerts/${encodeURIComponent(a.id)}/ack`, { method: "POST" });
+        await loadDashboard();
+        loadAlertDetail(a.id);
+      });
+    }
+  }
+
+  const fmtNum = (v) => Number(v).toLocaleString("es-PA", { maximumFractionDigits: 1 });
+  const fmtMetric = (m) => `${fmtNum(m.value)}${m.unit}`;
+  const PLAN_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" style="vertical-align:-4px;margin-right:8px"><path fill="currentColor" d="M9 2h6a2 2 0 0 1 2 2h1a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1a2 2 0 0 1 2-2zm0 2v2h6V4H9zm-1 7 1.4-1.4L11 11.2l3.6-3.6L16 9l-5 5-3-3z"/></svg>';
+
+  /** Path de un segmento de dona (anillo) entre dos ángulos. */
+  function annulusPath(cx, cy, rO, rI, a0, a1) {
+    const large = a1 - a0 > Math.PI ? 1 : 0;
+    const p = (r, a) => `${(cx + r * Math.cos(a)).toFixed(2)} ${(cy + r * Math.sin(a)).toFixed(2)}`;
+    return `M ${p(rO, a0)} A ${rO} ${rO} 0 ${large} 1 ${p(rO, a1)} ` +
+      `L ${p(rI, a1)} A ${rI} ${rI} 0 ${large} 0 ${p(rI, a0)} Z`;
+  }
+
+  // Formato compacto para el número del centro del donut (menos llamativo).
+  function moneyCompact(v) {
+    v = Number(v || 0);
+    const a = Math.abs(v);
+    if (a >= 1e6) return "$" + (v / 1e6).toLocaleString("es-PA", { maximumFractionDigits: a >= 1e7 ? 0 : 1 }) + "M";
+    if (a >= 1e3) return "$" + (v / 1e3).toLocaleString("es-PA", { maximumFractionDigits: a >= 1e4 ? 0 : 1 }) + "K";
+    return "$" + v.toLocaleString("es-PA", { maximumFractionDigits: 0 });
+  }
+
+  /**
+   * Dona SVG con segmentos que se expanden al pasar el cursor + tooltip.
+   * segments: {label, value, count, color, valueLabel?}
+   * El texto del centro es discreto: valor compacto + etiqueta pequeña.
+   */
+  function donut(container, segments, { centerValue, centerLabel } = {}) {
+    container.innerHTML = "";
+    const segs = segments.filter((s) => Number(s.value) > 0);
+    if (!segs.length) {
+      container.innerHTML = '<div class="empty">Sin datos en este periodo. Prueba con otro rango.</div>';
+      return;
+    }
+    const total = segs.reduce((a, s) => a + Number(s.value), 0);
+    const size = 200, cx = size / 2, cy = size / 2, rO = 92, rI = 64;
+    const svg = svgEl("svg", { viewBox: `0 0 ${size} ${size}`, class: "donut-svg", role: "img",
+      "aria-label": centerLabel || "Distribución" });
+
+    let a0 = -Math.PI / 2;
+    segs.forEach((seg) => {
+      const frac = Number(seg.value) / total;
+      // un solo segmento: anillo completo (evita el arco degenerado)
+      const a1 = segs.length === 1 ? a0 + 2 * Math.PI - 0.0001 : a0 + frac * 2 * Math.PI;
+      const mid = (a0 + a1) / 2;
+      const g = svgEl("g", { class: "donut-seg" });
+      const path = svgEl("path", { d: annulusPath(cx, cy, rO, rI, a0, a1),
+        fill: seg.color, stroke: "#fff", "stroke-width": 2.5, "stroke-linejoin": "round" });
+      g.append(path);
+      const dx = (Math.cos(mid) * 8).toFixed(1), dy = (Math.sin(mid) * 8).toFixed(1);
+      const tip = `<div class="tt-title">${esc(seg.label)}</div>` +
+        `<div>${int(seg.count)} trx · <b>${pct(frac * 100)}</b> del total</div>` +
+        (seg.valueLabel ? `<div class="tt-muted">${seg.valueLabel}</div>` : "");
+      const enter = (ev) => { g.style.transform = `translate(${dx}px, ${dy}px)`; showTooltip(tip, ev.clientX, ev.clientY); };
+      g.addEventListener("mousemove", enter);
+      g.addEventListener("mouseleave", () => { g.style.transform = ""; hideTooltip(); });
+      svg.append(g);
+      a0 = a1;
+    });
+
+    if (centerValue != null) {
+      const v = svgEl("text", { x: cx, y: cy - 1, "text-anchor": "middle", "font-size": 15, class: "donut-center-value" });
+      v.textContent = centerValue;
+      svg.append(v);
+    }
+    if (centerLabel) {
+      const l = svgEl("text", { x: cx, y: cy + 13, "text-anchor": "middle", "font-size": 9, class: "donut-center-label" });
+      l.textContent = centerLabel;
+      svg.append(l);
+    }
+    container.append(svg);
+    return svg;
+  }
+
+  // pill de comparación vs periodo anterior
+  function deltaPill(delta) {
+    if (delta == null) return '<span class="delta-pill flat">sin periodo previo</span>';
+    const dir = delta > 0.05 ? "up" : delta < -0.05 ? "down" : "flat";
+    const arrow = dir === "up" ? "▲" : dir === "down" ? "▼" : "•";
+    return `<span class="delta-pill ${dir}">${arrow} ${pct(Math.abs(delta))} vs. periodo anterior</span>`;
+  }
+
+  // Leyenda compartida por todos los donuts. items: {color, name, valueText, subText}
+  function buildDonutLegend(items) {
+    const el = document.createElement("div");
+    el.className = "donut-legend";
+    el.innerHTML = items.map((it) => `
+      <div class="donut-key">
+        <span class="donut-swatch" style="background:${it.color}"></span>
+        <span class="dk-name">${esc(it.name)}</span>
+        <span class="dk-val">${it.valueText}</span>
+        <span class="dk-sub">${it.subText}</span>
+      </div>`).join("");
+    return el;
+  }
+
   function renderProcessors(s) {
-    const colors = [SERIES[0], SERIES[1]];
-    hBars($("#chart-processors"),
-      s.processors.map((p, i) => ({
-        label: p.label,
-        value: Number(p.volume),
-        display: money(p.volume),
-        color: colors[i],
-        tooltip: `<div class="tt-title">${esc(p.label)}</div>` +
-          `<div>Volumen: <b>${moneyC(p.volume)}</b> (${pct(p.sharePct)} del total)</div>` +
-          `<div class="tt-muted">${int(p.txCount)} trx · ${pct(p.approvalRate)} aprobación</div>`,
-      })),
-      { legend: s.processors.map((p, i) => ({ label: `${p.label} · ${pct(p.approvalRate)} aprob.`, color: colors[i] })) });
+    const container = $("#chart-processors");
+    const total = s.processors.reduce((a, p) => a + Number(p.volume), 0);
+    const segs = s.processors.map((p) => ({
+      label: p.label,
+      value: Number(p.volume),
+      count: p.txCount,
+      color: CHANNEL_COLOR[p.processor] || SERIES[0],
+      valueLabel: `Volumen ${moneyC(p.volume)}`,
+    }));
+
+    donut(container, segs, { centerValue: moneyCompact(total), centerLabel: "volumen total" });
+    container.append(buildDonutLegend(s.processors.map((p) => ({
+      color: CHANNEL_COLOR[p.processor] || SERIES[0],
+      name: p.label,
+      valueText: money(p.volume),
+      subText: `${int(p.txCount)} trx · ${pct(p.sharePct)} del total · ${pct(p.approvalRate)} aprob. ${deltaPill(p.deltaPct)}`,
+    }))));
   }
 
   function renderServices(s) {
-    // barras nominales: una sola serie → un solo tono (slot 1), sin leyenda
-    hBars($("#chart-services"),
-      s.services.filter((x) => x.txCount > 0).map((x) => ({
-        label: x.label,
-        value: Number(x.volume),
-        display: money(x.volume),
-        color: SERIES[0],
-        tooltip: `<div class="tt-title">${esc(x.label)}</div>` +
-          `<div>Volumen: <b>${moneyC(x.volume)}</b> (${pct(x.sharePct)} del total)</div>` +
-          `<div class="tt-muted">${int(x.txCount)} trx</div>`,
-      })));
+    const container = $("#chart-services");
+    const items = s.services.filter((x) => x.txCount > 0);
+    const total = items.reduce((a, x) => a + Number(x.volume), 0);
+    const color = (i) => SERVICE_COLORS[i % SERVICE_COLORS.length];
+    const segs = items.map((x, i) => ({
+      label: x.label,
+      value: Number(x.volume),
+      count: x.txCount,
+      color: color(i),
+      valueLabel: `${int(x.txCount)} trx`,
+    }));
+
+    donut(container, segs, { centerValue: moneyCompact(total), centerLabel: "volumen aprob." });
+    container.append(buildDonutLegend(items.map((x, i) => ({
+      color: color(i),
+      name: x.label,
+      valueText: money(x.volume),
+      subText: `${int(x.txCount)} trx · ${pct(x.sharePct)} del total`,
+    }))));
   }
 
   function render3ds(s) {
     const t = s.threeDs;
-    const colors = [SERIES[0], SERIES[1]];
-    hBars($("#chart-3ds"), [
-      {
-        label: "Con 3DS", value: t.withApprovalRate ?? 0, display: pct(t.withApprovalRate), color: colors[0],
-        tooltip: `<div class="tt-title">Con 3DS</div><div>${int(t.withCount)} trx · aprobación <b>${pct(t.withApprovalRate)}</b></div>`,
-      },
-      {
-        label: "Sin 3DS", value: t.withoutApprovalRate ?? 0, display: pct(t.withoutApprovalRate), color: colors[1],
-        tooltip: `<div class="tt-title">Sin 3DS</div><div>${int(t.withoutCount)} trx · aprobación <b>${pct(t.withoutApprovalRate)}</b></div>`,
-      },
-    ], {
-      legend: [
-        { label: `Con 3DS · ${pct(t.withSharePct)} de las trx`, color: colors[0] },
-        { label: "Sin 3DS", color: colors[1] },
-      ],
-    });
+    const container = $("#chart-3ds");
+    const total = (t.withCount || 0) + (t.withoutCount || 0);
+    const segs = [
+      { label: "Con 3DS", value: t.withCount, count: t.withCount, color: THREEDS_COLORS[0],
+        valueLabel: `${pct(t.withApprovalRate)} aprobación` },
+      { label: "Sin 3DS", value: t.withoutCount, count: t.withoutCount, color: THREEDS_COLORS[1],
+        valueLabel: `${pct(t.withoutApprovalRate)} aprobación` },
+    ];
+
+    donut(container, segs, { centerValue: int(total), centerLabel: "transacciones" });
+    container.append(buildDonutLegend([
+      { color: THREEDS_COLORS[0], name: "Con 3DS", valueText: pct(t.withSharePct),
+        subText: `${int(t.withCount)} trx · ${pct(t.withApprovalRate)} aprob.` },
+      { color: THREEDS_COLORS[1], name: "Sin 3DS", valueText: pct(t.withSharePct == null ? null : 100 - t.withSharePct),
+        subText: `${int(t.withoutCount)} trx · ${pct(t.withoutApprovalRate)} aprob.` },
+    ]));
+  }
+
+  // Clasifica el plan de acción oficial para darle color de marca.
+  function actionClass(action) {
+    const a = (action || "").toLowerCase();
+    if (a.includes("emisor")) return "issuer";
+    if (a.includes("paguelofacil")) return "pf";
+    if (a.includes("autenticaci")) return "auth";
+    if (a.includes("tarjeta") || a.includes("aprobada")) return "card";
+    return "";
   }
 
   function renderDrTable(s) {
@@ -531,48 +873,93 @@
     }
     el.innerHTML = `
       <div class="table-wrap"><table class="data">
-        <thead><tr><th>Código</th><th>Descripción</th><th class="num">Rechazos</th><th class="num">% del total</th></tr></thead>
+        <thead><tr><th>Código</th><th>Motivo</th><th>Plan de acción</th><th class="num">Rechazos</th><th class="num">% del total</th></tr></thead>
         <tbody>
           ${s.topDeclineCodes.map((c) => `
             <tr>
               <td><b>${esc(c.code)}</b></td>
               <td>${esc(c.description)}</td>
+              <td><span class="dr-action ${actionClass(c.action)}">${esc(c.action)}</span></td>
               <td class="num">${int(c.count)}</td>
               <td class="num">${pct(c.pctOfDeclined)}</td>
             </tr>`).join("")}
         </tbody>
-      </table></div>`;
+      </table></div>
+      <div class="dr-source">Fuente: catálogo oficial de códigos de rechazo de PagueloFacil.
+        <a class="doc-open" href="codigos-rechazo.html" target="_blank" rel="noopener">Ver catálogo completo →</a></div>`;
   }
 
   // ---------- comparador de comercios ----------
 
-  function buildComparePicker() {
-    const el = $("#compare-picker");
-    el.innerHTML = "";
+  const COMPARE_MAX = 5;
+  const compareColor = (i) => SERVICE_COLORS[i % SERVICE_COLORS.length];
+
+  function setupCompare() {
+    // autocompletado: nombre visible, el ID como etiqueta secundaria
+    const list = $("#merchant-list");
+    list.innerHTML = "";
     state.merchants.forEach((m) => {
-      const btn = document.createElement("button");
-      btn.className = "pick-chip";
-      btn.type = "button";
-      btn.textContent = m.name;
-      btn.dataset.id = m.id;
-      btn.addEventListener("click", () => {
-        const i = state.compareSelection.indexOf(m.id);
-        if (i >= 0) state.compareSelection.splice(i, 1);
-        else if (state.compareSelection.length < 4) state.compareSelection.push(m.id);
-        updateComparePicker();
-        renderCompare();
-      });
-      el.append(btn);
+      const opt = document.createElement("option");
+      opt.value = m.name;
+      opt.label = m.id;
+      list.append(opt);
     });
+
+    $("#compare-add").addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      addCompareMerchant($("#compare-input").value);
+    });
+
+    // arranca con un par de comercios para que la comparación no salga vacía
     state.compareSelection = state.merchants.slice(0, 3).map((m) => m.id);
-    updateComparePicker();
+    renderCompareChips();
   }
 
-  function updateComparePicker() {
-    document.querySelectorAll(".pick-chip").forEach((c) => {
-      const selected = state.compareSelection.includes(c.dataset.id);
-      c.classList.toggle("selected", selected);
-      c.disabled = !selected && state.compareSelection.length >= 4;
+  // Resuelve un texto (nombre o ID) a un comercio y lo agrega a la comparación.
+  function addCompareMerchant(query) {
+    const q = (query || "").trim();
+    const hint = $("#compare-hint");
+    if (!q) return;
+    const ql = q.toLowerCase();
+    const m = state.merchants.find((x) => x.id.toLowerCase() === ql)
+      || state.merchants.find((x) => x.name.toLowerCase() === ql)
+      || state.merchants.find((x) => x.name.toLowerCase().includes(ql));
+
+    if (!m) { hint.textContent = `No encontramos ningún comercio para "${q}". Prueba con el nombre o su ID (ej: M-002).`; return; }
+    if (state.compareSelection.includes(m.id)) { hint.textContent = `${m.name} ya está en la comparación.`; return; }
+    if (state.compareSelection.length >= COMPARE_MAX) {
+      hint.textContent = `Puedes comparar hasta ${COMPARE_MAX} comercios. Quita uno para agregar otro.`;
+      return;
+    }
+    state.compareSelection.push(m.id);
+    $("#compare-input").value = "";
+    hint.textContent = "";
+    renderCompareChips();
+    renderCompare();
+  }
+
+  function removeCompareMerchant(id) {
+    const i = state.compareSelection.indexOf(id);
+    if (i >= 0) state.compareSelection.splice(i, 1);
+    renderCompareChips();
+    renderCompare();
+  }
+
+  // Chips de los comercios ya agregados, con color de gráfica y botón de quitar.
+  function renderCompareChips() {
+    const el = $("#compare-picker");
+    if (!state.compareSelection.length) {
+      el.innerHTML = '<div class="compare-empty">Agrega comercios por nombre o ID para compararlos.</div>';
+      return;
+    }
+    el.innerHTML = state.compareSelection.map((id, i) => `
+      <span class="compare-chip">
+        <span class="compare-dot" style="background:${compareColor(i)}"></span>
+        ${esc(merchantLabel(id))}
+        <button type="button" class="compare-remove" data-remove="${esc(id)}" title="Quitar" aria-label="Quitar">✕</button>
+      </span>`).join("");
+    el.querySelectorAll("[data-remove]").forEach((btn) => {
+      btn.addEventListener("click", () => removeCompareMerchant(btn.dataset.remove));
     });
   }
 
@@ -591,19 +978,22 @@
     if (to) p.set("to", to);
     const rows = await api(`/api/dashboard/compare?${p}`);
 
-    // el color sigue al comercio según su orden de selección (fijo, no por ranking)
+    // el color sigue al comercio según su orden de selección (paleta de marca)
     const colorById = {};
-    state.compareSelection.forEach((id, i) => { colorById[id] = SERIES[i]; });
+    state.compareSelection.forEach((id, i) => { colorById[id] = compareColor(i); });
 
-    hBars(chartEl, rows.map((r) => ({
-      label: r.merchantName.length > 20 ? r.merchantName.slice(0, 19) + "…" : r.merchantName,
-      value: Number(r.volume),
-      display: money(r.volume),
-      color: colorById[r.merchantId],
-      tooltip: `<div class="tt-title">${esc(r.merchantName)}</div>` +
-        `<div>Volumen: <b>${moneyC(r.volume)}</b></div>` +
-        `<div class="tt-muted">${int(r.txCount)} trx · ${pct(r.approvalRate)} aprobación · reembolsos ${pct(r.refundPct)}</div>`,
-    })), { width: 620, labelWidth: 168 });
+    hBars(chartEl, rows.map((r) => {
+      const full = nameId(r.merchantName, r.merchantId);
+      return {
+        label: full.length > 22 ? full.slice(0, 21) + "…" : full,
+        value: Number(r.volume),
+        display: money(r.volume),
+        color: colorById[r.merchantId],
+        tooltip: `<div class="tt-title">${esc(full)}</div>` +
+          `<div>Volumen: <b>${moneyC(r.volume)}</b></div>` +
+          `<div class="tt-muted">${int(r.txCount)} trx · ${pct(r.approvalRate)} aprobación · reembolsos ${pct(r.refundPct)}</div>`,
+      };
+    }), { width: 620, labelWidth: 178 });
 
     tableEl.innerHTML = `
       <div class="table-wrap"><table class="data">
@@ -611,7 +1001,7 @@
         <tbody>
           ${rows.map((r) => `
             <tr>
-              <td><span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${colorById[r.merchantId]};margin-right:7px"></span>${esc(r.merchantName)}</td>
+              <td><span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${colorById[r.merchantId]};margin-right:7px"></span>${esc(nameId(r.merchantName, r.merchantId))}</td>
               <td class="num">${money(r.volume)}</td>
               <td class="num">${int(r.txCount)}</td>
               <td class="num">${pct(r.approvalRate)}</td>
@@ -663,7 +1053,7 @@
           ${rows.map((c) => `
             <tr>
               <td>${esc(c.id)}</td>
-              <td>${esc(merchantName(c.merchantId))}</td>
+              <td>${esc(merchantLabel(c.merchantId))}</td>
               <td>${c.processor === "POWERTRANZ" ? "PowerTranz" : "Evertec"}</td>
               <td><code>${esc(c.dba)}</code></td>
               <td>${esc(c.credentialType)}</td>
@@ -696,7 +1086,7 @@
           ${points.map((p) => `
             <tr>
               <td>${esc(p.id)}</td>
-              <td>${esc(merchantName(p.merchantId))}</td>
+              <td>${esc(merchantLabel(p.merchantId))}</td>
               <td>${esc(p.bank)}</td>
               <td>${esc(p.deviceType)}</td>
               <td><code>${esc(p.serial)}</code></td>
@@ -714,7 +1104,10 @@
   const WARN_ICON = '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 2 22 20H2L12 2zm-1 6v6h2V8h-2zm0 8v2h2v-2h-2z"/></svg>';
 
   // documentos con archivo abrible (formularios/plantillas)
-  const DOC_LINKS = { "D-008": "ficha-comercio.html" };
+  const DOC_LINKS = {
+    "D-001": { url: "codigos-rechazo.html", label: "Abrir catálogo →" },
+    "D-008": { url: "ficha-comercio.html", label: "Abrir formulario →" },
+  };
 
   async function loadDocuments() {
     const docs = await api("/api/documents");
@@ -731,7 +1124,7 @@
                 <h3>${esc(d.title)}</h3>
                 <p>${esc(d.description)}</p>
                 <div class="doc-date">Actualizado ${fmtDate.format(parseDay(d.updatedAt))}</div>
-                ${DOC_LINKS[d.id] ? `<a class="doc-open" href="${DOC_LINKS[d.id]}" target="_blank" rel="noopener">Abrir formulario →</a>` : ""}
+                ${DOC_LINKS[d.id] ? `<a class="doc-open" href="${DOC_LINKS[d.id].url}" target="_blank" rel="noopener">${DOC_LINKS[d.id].label}</a>` : ""}
               </div>
             </div>`).join("")}
         </div>
@@ -909,7 +1302,69 @@
       </div>`;
   }
 
-  // ---------- reglas de alertas ----------
+  // ---------- reglas de alertas y planes de acción ----------
+
+  const planName = (id) => (state.actionPlans.find((p) => p.id === id) || {}).name || null;
+
+  async function loadRulesAndPlans() {
+    // los planes primero: alimentan el selector de la regla y la lista
+    state.actionPlans = await api("/api/action-plans");
+    renderPlans();
+    populatePlanSelect();
+    await loadRules();
+  }
+
+  function populatePlanSelect() {
+    const sel = $("#r-actionplan");
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Selecciona un plan…</option>';
+    state.actionPlans.forEach((p) => sel.append(new Option(p.name, p.id)));
+    if (current) sel.value = current;
+  }
+
+  function renderPlans() {
+    const el = $("#plans-list");
+    if (!state.actionPlans.length) {
+      el.innerHTML = '<div class="empty">Aún no hay planes de acción. Crea el primero con el formulario.</div>';
+      return;
+    }
+    el.innerHTML = state.actionPlans.map((p) => `
+      <div class="rule-item">
+        <div class="rule-body">
+          <div class="rule-name">${esc(p.name)}</div>
+          <div class="rule-desc">${esc(p.description || "")}</div>
+          <div class="rule-tags">${chip(`${(p.steps || []).length} paso${(p.steps || []).length !== 1 ? "s" : ""}`, "neutral")}</div>
+        </div>
+        <button class="btn btn-ghost" data-del-plan="${esc(p.id)}" title="Eliminar">✕</button>
+      </div>`).join("");
+
+    el.querySelectorAll("[data-del-plan]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const res = await fetch(`/api/action-plans/${encodeURIComponent(btn.dataset.delPlan)}`, { method: "DELETE" });
+        if (res.status === 409) {
+          alert("No puedes eliminar este plan: sigue enlazado a una o más reglas.");
+          return;
+        }
+        loadRulesAndPlans();
+      });
+    });
+  }
+
+  async function onCreatePlan(ev) {
+    ev.preventDefault();
+    const steps = $("#ap-steps").value.split("\n").map((s) => s.trim()).filter(Boolean);
+    await api("/api/action-plans", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: $("#ap-name").value.trim(),
+        description: $("#ap-desc").value.trim(),
+        steps,
+      }),
+    });
+    $("#ap-form").reset();
+    await loadRulesAndPlans();
+  }
 
   async function loadRules() {
     const rules = await api("/api/alert-rules");
@@ -921,7 +1376,8 @@
           <div class="rule-desc">${esc(conditionLabel(r.condition))} · umbral ${r.threshold}${r.drCode ? ` · código ${esc(r.drCode)}` : ""}</div>
           <div class="rule-tags">
             ${r.standard ? chip("Regla estándar", "neutral") : chip("Personalizada", "neutral")}
-            ${r.scope === "MERCHANT" ? chip(merchantName(r.merchantId), "neutral") : chip("Global", "neutral")}
+            ${r.scope === "MERCHANT" ? chip(merchantLabel(r.merchantId), "neutral") : chip("Global", "neutral")}
+            ${r.actionPlanId ? chip("Plan: " + (planName(r.actionPlanId) || r.actionPlanId), "good") : chip("Sin plan", "warning")}
           </div>
         </div>
         <label class="switch" title="${r.enabled ? "Desactivar" : "Activar"}">
@@ -954,6 +1410,8 @@
     ev.preventDefault();
     const scope = $("#r-scope").value;
     const condition = $("#r-condition").value;
+    const actionPlanId = $("#r-actionplan").value;
+    if (!actionPlanId) { $("#r-actionplan").focus(); return; }
     await api("/api/alert-rules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -964,6 +1422,7 @@
         condition,
         threshold: Number($("#r-threshold").value),
         drCode: condition === "DR_CODE_RECURRENT" ? $("#r-drcode").value : null,
+        actionPlanId,
         standard: false,
         enabled: true,
       }),
@@ -971,7 +1430,7 @@
     $("#rule-form").reset();
     $("#r-merchant-wrap").hidden = true;
     $("#r-drcode-wrap").hidden = true;
-    loadRules();
+    loadRulesAndPlans();
   }
 
   // ---------- arranque ----------

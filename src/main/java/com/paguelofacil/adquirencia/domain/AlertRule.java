@@ -37,6 +37,7 @@ public class AlertRule {
     private double threshold;
     private String drCode;          // solo para DR_CODE_RECURRENT
     private Processor processor;    // solo para CHANNEL_VOLUME_DROP (null = todos)
+    private String actionPlanId;    // plan de acción enlazado (toda regla lo tiene)
     private boolean standard;
     private boolean enabled = true;
 
@@ -45,6 +46,12 @@ public class AlertRule {
 
     public AlertRule(String id, String name, Scope scope, String merchantId, Condition condition,
                      double threshold, String drCode, Processor processor, boolean standard, boolean enabled) {
+        this(id, name, scope, merchantId, condition, threshold, drCode, processor, null, standard, enabled);
+    }
+
+    public AlertRule(String id, String name, Scope scope, String merchantId, Condition condition,
+                     double threshold, String drCode, Processor processor, String actionPlanId,
+                     boolean standard, boolean enabled) {
         this.id = id;
         this.name = name;
         this.scope = scope;
@@ -53,6 +60,7 @@ public class AlertRule {
         this.threshold = threshold;
         this.drCode = drCode;
         this.processor = processor;
+        this.actionPlanId = actionPlanId;
         this.standard = standard;
         this.enabled = enabled;
     }
@@ -73,6 +81,8 @@ public class AlertRule {
     public void setDrCode(String drCode) { this.drCode = drCode; }
     public Processor getProcessor() { return processor; }
     public void setProcessor(Processor processor) { this.processor = processor; }
+    public String getActionPlanId() { return actionPlanId; }
+    public void setActionPlanId(String actionPlanId) { this.actionPlanId = actionPlanId; }
     public boolean isStandard() { return standard; }
     public void setStandard(boolean standard) { this.standard = standard; }
     public boolean isEnabled() { return enabled; }
