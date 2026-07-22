@@ -1124,6 +1124,15 @@
   }
 
   function renderCredBody() {
+    if (!state.credentials.length) {
+      $("#credentials-body").innerHTML = `
+        <div class="cred-empty">
+          <div class="empty">Aún no hay credenciales. Empieza registrando la primera: la solicitas al banco, la avanzas por cada etapa y controlas sus pruebas por marca.</div>
+          <button class="btn btn-primary" id="cred-empty-new">Registrar la primera credencial</button>
+        </div>`;
+      $("#cred-empty-new").addEventListener("click", () => openCredForm(null));
+      return;
+    }
     const list = filteredCreds();
     if (state.credView === "kanban") renderCredKanban(list);
     else renderCredTable(list);
