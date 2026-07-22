@@ -37,11 +37,6 @@ public class CatalogController {
         return store.projects();
     }
 
-    @GetMapping("/payment-points")
-    public List<PaymentPoint> paymentPoints() {
-        return store.paymentPoints();
-    }
-
     @GetMapping("/documents")
     public List<DocumentItem> documents() {
         return store.documents();

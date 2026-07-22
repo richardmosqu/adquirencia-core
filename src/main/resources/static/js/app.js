@@ -58,6 +58,7 @@
     credentials: [],
     credView: "table",
     credDetailId: null,
+    paymentPoints: [],
     view: "dashboard",
   };
 
@@ -356,6 +357,7 @@
     $("#cred-merchant-filter").addEventListener("change", renderCredBody);
     $("#cred-refund-filter").addEventListener("change", renderCredBody);
     $("#cred-new").addEventListener("click", () => openCredForm(null));
+    $("#point-new").addEventListener("click", () => openPointForm(null));
 
     // copiar al portapapeles cualquier campo con [data-copy]
     document.addEventListener("click", (ev) => {
@@ -1600,24 +1602,98 @@
 
   // ---------- puntos de pago ----------
 
+  const POINT_BANKS = ["Towerbank", "BAC"];
+  const POINT_DEVICES = ["POS Android", "POS clásico", "mPOS", "SoftPOS"];
+  const POINT_STATUSES = ["Operativo", "Por instalar", "En reparación", "Sin conexión"];
+
+  // Comercio del POS: "Sin asignar" si no está asignado a ninguno.
+  const pointMerchant = (id) => (id ? merchantLabel(id) : "Sin asignar");
+
   async function loadPoints() {
-    const points = await api("/api/payment-points");
+    state.paymentPoints = await api("/api/payment-points");
+    renderPoints();
+  }
+
+  function renderPoints() {
+    const points = state.paymentPoints;
+    if (!points.length) {
+      $("#points-table").innerHTML = `
+        <div class="cred-empty">
+          <div class="empty">Aún no hay puntos de pago registrados. Agrega el primero para gestionarlo aquí.</div>
+          <button class="btn btn-primary" id="point-empty-new">Registrar el primer POS</button>
+        </div>`;
+      $("#point-empty-new").addEventListener("click", () => openPointForm(null));
+      return;
+    }
     $("#points-table").innerHTML = `
       <div class="table-wrap"><table class="data">
-        <thead><tr><th>ID</th><th>Comercio</th><th>Banco</th><th>Dispositivo</th><th>Serial</th><th>Estado</th></tr></thead>
+        <thead><tr><th>ID</th><th>Comercio</th><th>Banco</th><th>Dispositivo</th><th>Serial</th><th>Estado</th><th></th></tr></thead>
         <tbody>
           ${points.map((p) => `
             <tr>
               <td>${esc(p.id)}</td>
-              <td>${esc(merchantLabel(p.merchantId))}</td>
-              <td>${esc(p.bank)}</td>
-              <td>${esc(p.deviceType)}</td>
-              <td><code>${esc(p.serial)}</code></td>
+              <td>${p.merchantId ? esc(merchantLabel(p.merchantId)) : '<span class="unassigned">Sin asignar</span>'}</td>
+              <td>${esc(p.bank || "—")}</td>
+              <td>${esc(p.deviceType || "—")}</td>
+              <td><code>${esc(p.serial || "—")}</code></td>
               <td>${chip(p.status)}</td>
+              <td><button class="btn" data-point-edit="${esc(p.id)}">Editar</button></td>
             </tr>`).join("")}
         </tbody>
-      </table></div>
-      ${points.length === 0 ? '<div class="empty">Todavía no hay puntos de pago registrados.</div>' : ""}`;
+      </table></div>`;
+    document.querySelectorAll("[data-point-edit]").forEach((b) =>
+      b.addEventListener("click", () => openPointForm(state.paymentPoints.find((p) => p.id === b.dataset.pointEdit))));
+  }
+
+  function openPointForm(p) {
+    const isNew = !p;
+    p = p || { bank: "Towerbank", deviceType: "POS Android", status: "Por instalar", merchantId: "" };
+    const merchOpts = state.merchants.map((m) =>
+      `<option value="${m.id}" ${m.id === p.merchantId ? "selected" : ""}>${esc(m.name)} (${esc(m.id)})</option>`).join("");
+    const body = `
+      <form class="cred-form">
+        <div class="cred-form-grid">
+          <label class="cf-wide">Comercio
+            <select id="pf-merchant">
+              <option value="" ${!p.merchantId ? "selected" : ""}>Sin asignar</option>
+              ${merchOpts}
+            </select>
+          </label>
+          <label>Banco<select id="pf-bank">${opt(POINT_BANKS, p.bank)}</select></label>
+          <label>Dispositivo<select id="pf-device">${opt(POINT_DEVICES, p.deviceType)}</select></label>
+          <label>Serial<input id="pf-serial" value="${esc(p.serial || "")}" placeholder="SN-000000"></label>
+          <label>Estado<select id="pf-status">${opt(POINT_STATUSES, p.status)}</select></label>
+        </div>
+      </form>`;
+    openModal(isNew ? "Agregar POS" : `Editar POS · ${esc(p.id)}`, body,
+      `<button class="btn" data-modal-close>Cancelar</button>
+       <button class="btn btn-primary" id="pf-save">${isNew ? "Agregar POS" : "Guardar cambios"}</button>`);
+    $("#pf-save").addEventListener("click", () => savePointForm(isNew ? null : p));
+  }
+
+  async function savePointForm(existing) {
+    const body = {
+      ...(existing || {}),
+      merchantId: $("#pf-merchant").value || null,
+      bank: $("#pf-bank").value,
+      deviceType: $("#pf-device").value,
+      serial: $("#pf-serial").value.trim(),
+      status: $("#pf-status").value,
+    };
+    if (existing) {
+      const updated = await api(`/api/payment-points/${encodeURIComponent(existing.id)}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, id: existing.id }),
+      });
+      const i = state.paymentPoints.findIndex((x) => x.id === existing.id);
+      if (i >= 0) state.paymentPoints[i] = updated;
+    } else {
+      const created = await api("/api/payment-points", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      state.paymentPoints.push(created);
+    }
+    closeModal();
+    renderPoints();
   }
 
   // ---------- documentos ----------

@@ -135,7 +135,7 @@ public class DataStore {
     private final List<AlertRule> alertRules = new CopyOnWriteArrayList<>();
     private final List<Project> projects = new ArrayList<>();
     private final List<Credential> credentials = new CopyOnWriteArrayList<>();
-    private final List<PaymentPoint> paymentPoints = new ArrayList<>();
+    private final List<PaymentPoint> paymentPoints = new CopyOnWriteArrayList<>();
     private final List<DocumentItem> documents = new ArrayList<>();
     private final List<Acquirer> acquirers = new CopyOnWriteArrayList<>();
     private final List<ActionPlan> actionPlans = new CopyOnWriteArrayList<>();
@@ -414,24 +414,9 @@ public class DataStore {
         // Intencionalmente vacío.
     }
 
+    /** Sin puntos de pago de demostración: el módulo arranca vacío. */
     private void seedPaymentPoints(Random rnd) {
-        String[] devices = {"POS Android", "POS clásico", "mPOS", "SoftPOS"};
-        String[] banks = {"Towerbank", "BAC"};
-        int seq = 1;
-        for (Merchant m : merchants) {
-            int n = rnd.nextInt(4); // no todos los comercios tienen POS físico
-            for (int i = 0; i < n; i++) {
-                String status = switch (rnd.nextInt(10)) {
-                    case 0 -> "Sin conexión";
-                    case 1 -> "En reparación";
-                    case 2 -> "Por instalar";
-                    default -> "Operativo";
-                };
-                paymentPoints.add(new PaymentPoint(String.format("PP-%03d", seq++), m.id(),
-                        banks[rnd.nextInt(banks.length)], devices[rnd.nextInt(devices.length)],
-                        "SN-" + (100000 + rnd.nextInt(900000)), status));
-            }
-        }
+        // Intencionalmente vacío.
     }
 
     private void seedDocuments() {
