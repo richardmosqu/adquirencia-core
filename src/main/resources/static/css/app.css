@@ -1155,9 +1155,17 @@ table.data a, .link, table.data .cell-link {
 .bt-name { font-weight: 700; font-size: 14px; }
 .bt-actions { display: flex; gap: 6px; margin-bottom: 10px; }
 .bt-op { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; color: var(--ink-2); }
-.bt-op input {
-  font-family: var(--font); font-size: 13px; padding: 7px 10px;
-  border: 1px solid var(--field-line); border-radius: 8px; color: var(--ink);
+.op-input { display: flex; align-items: stretch; border: 1px solid var(--field-line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.op-input:focus-within { outline: 2px solid var(--pf-green); outline-offset: 1px; }
+.op-prefix {
+  display: flex; align-items: center; padding: 0 8px;
+  background: var(--gray-200); color: var(--ink-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; font-weight: 600;
+  border-right: 1px solid var(--field-line);
+}
+.op-input input {
+  flex: 1; min-width: 0; border: 0; outline: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 7px 10px; color: var(--ink);
 }
 
 .refund-banner {

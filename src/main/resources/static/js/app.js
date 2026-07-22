@@ -1077,6 +1077,17 @@
     { key: "Amex", label: "AMEX", short: "AMEX" },
   ];
   const TEST_STATES = ["Pendiente", "OK", "Falló"];
+  const OP_PREFIX = "AUTH_CAP-";
+
+  // Etiquetas de las credenciales sensibles según el procesador/banco.
+  // PowerTranz 3DS (BAC): PowerTranz ID + Contraseña. Evertec (Towerbank): Login + Secret Key.
+  const credLabels = (proc) => (proc === "EVERTEC"
+    ? { id: "Login", secret: "Secret Key" }
+    : { id: "PowerTranz ID", secret: "Contraseña" });
+
+  // Los códigos de operación siempre llevan el prefijo AUTH_CAP-; el usuario solo anota el número.
+  const opNumber = (full) => (full && full.startsWith(OP_PREFIX) ? full.slice(OP_PREFIX.length) : (full || ""));
+  const opFull = (num) => { const n = (num || "").trim(); return n ? OP_PREFIX + n : ""; };
 
   const COPY_ICON = '<svg viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>';
   const CHECK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>';
@@ -1278,9 +1289,9 @@
         ${credStatusChip(c.status)}
       </div>
       <div class="cred-fields">
-        ${credField("PowerTranz ID", c.powertranzId, true)}
-        ${credField("Contraseña", c.contrasena, true)}
-        ${credField("PW Admin Site", c.pwAdminSite, true)}
+        ${credField(credLabels(c.processor).id, c.powertranzId, true)}
+        ${credField(credLabels(c.processor).secret, c.contrasena, true)}
+        ${c.processor !== "EVERTEC" ? credField("PW Admin Site", c.pwAdminSite, true) : ""}
         ${credField("Tarjetas", c.tarjetas, true)}
         ${credField("Monedas", c.monedas, true)}
         ${credField("3DS", c.threeDs ? "Sí" : "No", false)}
@@ -1325,19 +1336,15 @@
           <label class="cf-check"><input type="checkbox" id="cf-3ds" ${c.threeDs ? "checked" : ""}> 3DS</label>
 
           <div class="cf-section">Credenciales</div>
-          <label>PowerTranz ID<input id="cf-ptid" value="${esc(c.powertranzId || "")}"></label>
-          <label>Contraseña<input id="cf-pass" value="${esc(c.contrasena || "")}"></label>
-          <label>PW Admin Site<input id="cf-adminpw" value="${esc(c.pwAdminSite || "")}"></label>
+          <label><span id="cf-lbl-id">${esc(credLabels(c.processor).id)}</span><input id="cf-ptid" value="${esc(c.powertranzId || "")}"></label>
+          <label><span id="cf-lbl-secret">${esc(credLabels(c.processor).secret)}</span><input id="cf-pass" value="${esc(c.contrasena || "")}"></label>
+          <label id="cf-adminpw-wrap" ${c.processor === "EVERTEC" ? "hidden" : ""}>PW Admin Site<input id="cf-adminpw" value="${esc(c.pwAdminSite || "")}"></label>
           <label>Tarjetas<input id="cf-tarjetas" value="${esc(c.tarjetas || "")}"></label>
           <label>Monedas<input id="cf-monedas" value="${esc(c.monedas || "")}"></label>
           <label>Límite por Trx (USD)<input type="number" step="any" id="cf-pertx" value="${c.limitePorTrx || ""}"></label>
           <label>Límite mensual (USD)<input type="number" step="any" id="cf-monthly" value="${c.limiteMensual || ""}"></label>
 
-          <div class="cf-section">Pruebas por marca</div>
-          ${CRED_BRANDS.map((b) => `
-            <label>Prueba ${b.short}<select id="cf-prueba${b.key}">${opt(TEST_STATES, c["prueba" + b.key] || "Pendiente")}</select></label>
-            <label>Código operación ${b.short}<input id="cf-op${b.key}" value="${esc(c["codigoOperacion" + b.key] || "")}"></label>`).join("")}
-          <label class="cf-check"><input type="checkbox" id="cf-refunds" ${c.reembolsosPruebas ? "checked" : ""}> Reembolsos de pruebas emitidos</label>
+          <div class="cf-section">Estado y migración</div>
           <label class="cf-check"><input type="checkbox" id="cf-bac" ${c.aprobadoPorBac ? "checked" : ""}> Aprobado por BAC</label>
           <label>Fecha de migración<input type="date" id="cf-migracion" value="${esc(c.fechaMigracion || "")}"></label>
 
@@ -1349,6 +1356,13 @@
     const foot = `<button class="btn" data-modal-close>Cancelar</button>
       <button class="btn btn-primary" id="cf-save">${isNew ? "Crear credencial" : "Guardar cambios"}</button>`;
     openModal(isNew ? "Nueva credencial" : `Editar credencial · ${esc(c.id)}`, body, foot);
+    // las etiquetas de las credenciales cambian según el procesador
+    $("#cf-proc").addEventListener("change", () => {
+      const L = credLabels($("#cf-proc").value);
+      $("#cf-lbl-id").textContent = L.id;
+      $("#cf-lbl-secret").textContent = L.secret;
+      $("#cf-adminpw-wrap").hidden = $("#cf-proc").value === "EVERTEC";
+    });
     $("#cf-save").addEventListener("click", () => saveCredForm(isNew ? null : c));
   }
 
@@ -1371,16 +1385,12 @@
       monedas: $("#cf-monedas").value.trim(),
       limitePorTrx: num("#cf-pertx"),
       limiteMensual: num("#cf-monthly"),
-      reembolsosPruebas: $("#cf-refunds").checked,
       aprobadoPorBac: $("#cf-bac").checked,
       fechaMigracion: $("#cf-migracion").value || null,
       notas: $("#cf-notas").value.trim(),
       observaciones: $("#cf-obs").value.trim(),
     };
-    CRED_BRANDS.forEach((b) => {
-      body["prueba" + b.key] = $("#cf-prueba" + b.key).value;
-      body["codigoOperacion" + b.key] = $("#cf-op" + b.key).value.trim();
-    });
+    // Las pruebas por marca no se editan aquí: se gestionan en el detalle de la credencial.
     if (!body.merchantId) { $("#cf-merchant").focus(); return; }
 
     if (existing) {
@@ -1427,7 +1437,10 @@
           ${TEST_STATES.map((t) => `<button class="btn btn-sm ${t === test ? "btn-primary" : ""}" data-brand="${b.key}" data-result="${t}">${t}</button>`).join("")}
         </div>
         <label class="bt-op">Código de operación
-          <input data-opcode="${b.key}" value="${esc(opc)}" placeholder="OP-000000">
+          <div class="op-input">
+            <span class="op-prefix">${OP_PREFIX}</span>
+            <input data-opcode="${b.key}" value="${esc(opNumber(opc))}" placeholder="000000" inputmode="numeric">
+          </div>
         </label>
       </div>`;
     }).join("");
@@ -1505,7 +1518,7 @@
     el.querySelectorAll("[data-brand]").forEach((b) =>
       b.addEventListener("click", () => setBrandTest(c, b.dataset.brand, b.dataset.result)));
     el.querySelectorAll("[data-opcode]").forEach((inp) =>
-      inp.addEventListener("change", () => saveOpCode(c, inp.dataset.opcode, inp.value.trim())));
+      inp.addEventListener("change", () => saveOpCode(c, inp.dataset.opcode, opFull(inp.value))));
   }
 
   // ---------- modales ----------
