@@ -8,7 +8,20 @@
 
   // ---------- constantes ----------
 
-  const SERIES = ["#55990F", "#3B62AD", "#C08A00", "#128F6C"]; // paleta validada
+  // Fuente única de color: se leen las variables de marca definidas en :root
+  // (app.css) para no repetir HEX en el JS de las gráficas.
+  const rootStyle = getComputedStyle(document.documentElement);
+  const cssVar = (name) => rootStyle.getPropertyValue(name).trim();
+
+  const SERIES = ["--series-1", "--series-2", "--series-3", "--series-4"].map(cssVar);
+  const CHART = {
+    grid: cssVar("--grid"),
+    axis: cssVar("--axis-text"),
+    baseline: cssVar("--chart-baseline"),
+    crosshair: cssVar("--chart-crosshair"),
+    barLabel: cssVar("--bar-label"),
+    barValue: cssVar("--bar-value"),
+  };
   const SERVICES = [
     { value: "AUTH_CAPTURE", label: "Auth/Capture" },
     { value: "RECURRENCIA", label: "Recurrencia" },
@@ -129,7 +142,7 @@
   /** Serie diaria de volumen: área + línea con crosshair y tooltip. */
   function lineChart(container, daily) {
     container.innerHTML = "";
-    if (!daily.length) { container.innerHTML = '<div class="empty">Sin datos en el periodo.</div>'; return; }
+    if (!daily.length) { container.innerHTML = '<div class="empty">Aún no hay datos en este periodo. Prueba con otro rango.</div>'; return; }
 
     const W = 820, H = 250, ml = 58, mr = 14, mt = 12, mb = 30;
     const iw = W - ml - mr, ih = H - mt - mb;
@@ -143,8 +156,8 @@
 
     for (let g = 0; g <= 4; g++) {
       const gy = mt + (ih * g) / 4;
-      svg.append(svgEl("line", { x1: ml, x2: W - mr, y1: gy, y2: gy, stroke: "#e1e0d9", "stroke-width": 1 }));
-      const t = svgEl("text", { x: ml - 8, y: gy + 4, "text-anchor": "end", "font-size": 11, fill: "#898781" });
+      svg.append(svgEl("line", { x1: ml, x2: W - mr, y1: gy, y2: gy, stroke: CHART.grid, "stroke-width": 1 }));
+      const t = svgEl("text", { x: ml - 8, y: gy + 4, "text-anchor": "end", "font-size": 11, fill: CHART.axis });
       t.textContent = int(max * (1 - g / 4));
       svg.append(t);
     }
@@ -152,7 +165,7 @@
     const step = Math.max(1, Math.ceil(daily.length / 7));
     daily.forEach((d, i) => {
       if (i % step !== 0 && i !== daily.length - 1) return;
-      const t = svgEl("text", { x: x(i), y: H - 8, "text-anchor": "middle", "font-size": 11, fill: "#898781" });
+      const t = svgEl("text", { x: x(i), y: H - 8, "text-anchor": "middle", "font-size": 11, fill: CHART.axis });
       t.textContent = fmtDay.format(parseDay(d.date));
       svg.append(t);
     });
@@ -161,9 +174,9 @@
     const areaD = `M ${ml},${mt + ih} L ${linePts.replaceAll(" ", " L ")} L ${x(daily.length - 1)},${mt + ih} Z`;
     svg.append(svgEl("path", { d: areaD, fill: SERIES[0], opacity: 0.12 }));
     svg.append(svgEl("polyline", { points: linePts, fill: "none", stroke: SERIES[0], "stroke-width": 2, "stroke-linejoin": "round" }));
-    svg.append(svgEl("line", { x1: ml, x2: W - mr, y1: mt + ih, y2: mt + ih, stroke: "#c3c2b7", "stroke-width": 1 }));
+    svg.append(svgEl("line", { x1: ml, x2: W - mr, y1: mt + ih, y2: mt + ih, stroke: CHART.baseline, "stroke-width": 1 }));
 
-    const cross = svgEl("line", { y1: mt, y2: mt + ih, stroke: "#898781", "stroke-width": 1, "stroke-dasharray": "3 3", visibility: "hidden" });
+    const cross = svgEl("line", { y1: mt, y2: mt + ih, stroke: CHART.crosshair, "stroke-width": 1, "stroke-dasharray": "3 3", visibility: "hidden" });
     const dot = svgEl("circle", { r: 4.5, fill: SERIES[0], stroke: "#fff", "stroke-width": 2, visibility: "hidden" });
     svg.append(cross, dot);
 
@@ -200,7 +213,7 @@
   function hBars(container, items, { legend = null, valueSuffix = "", width = 420, labelWidth = 118 } = {}) {
     container.innerHTML = "";
     if (!items.length || items.every((i) => !i.value)) {
-      container.innerHTML = '<div class="empty">Sin datos en el periodo.</div>';
+      container.innerHTML = '<div class="empty">Aún no hay datos en este periodo. Prueba con otro rango.</div>';
       return;
     }
 
@@ -221,7 +234,7 @@
 
     items.forEach((item, idx) => {
       const cy = idx * rowH + rowH / 2 + 3;
-      const label = svgEl("text", { x: labelW - 8, y: cy + 4, "text-anchor": "end", "font-size": 12, fill: "#52514e" });
+      const label = svgEl("text", { x: labelW - 8, y: cy + 4, "text-anchor": "end", "font-size": 12, fill: CHART.barLabel });
       label.textContent = item.label;
       svg.append(label);
 
@@ -233,7 +246,7 @@
       const bar = svgEl("path", { d, fill: item.color });
       svg.append(bar);
 
-      const val = svgEl("text", { x: labelW + w + 8, y: cy + 4, "font-size": 12, "font-weight": 600, fill: "#20261A" });
+      const val = svgEl("text", { x: labelW + w + 8, y: cy + 4, "font-size": 12, "font-weight": 600, fill: CHART.barValue });
       val.textContent = item.display + valueSuffix;
       svg.append(val);
 
@@ -284,22 +297,15 @@
   }
 
   function wireEvents() {
-    document.querySelectorAll(".nav-item").forEach((item) => {
+    // dock flotante: navegación plana
+    document.querySelectorAll(".dock-item").forEach((item) => {
       item.addEventListener("click", () => switchView(item.dataset.view));
     });
 
-    // grupos colapsables del sidebar
-    document.querySelectorAll(".nav-group-head").forEach((head) => {
-      head.addEventListener("click", () => head.parentElement.classList.toggle("open"));
-    });
-
-    // hamburguesa: contrae el sidebar (en móvil lo abre como panel flotante)
-    $("#menu-toggle").addEventListener("click", () => {
-      if (window.matchMedia("(max-width: 860px)").matches) {
-        document.body.classList.toggle("nav-open");
-      } else {
-        document.body.classList.toggle("nav-collapsed");
-      }
+    // la píldora de alertas del topbar lleva a la vista de alertas
+    $("#alert-pill").addEventListener("click", (ev) => {
+      ev.preventDefault();
+      switchView("alert-config");
     });
 
     $("#f-range").addEventListener("change", () => {
@@ -321,22 +327,26 @@
 
     $("#cred-proc-filter").addEventListener("change", renderCredentials);
     $("#cred-status-filter").addEventListener("change", renderCredentials);
+
+    $("#calc-form").addEventListener("submit", onCalcSubmit);
+    $("#calc-reset").addEventListener("click", () => { $("#calc-result").innerHTML = ""; });
+    $("#acq-form").addEventListener("submit", onAcqSubmit);
+    $("#acq-cancel").addEventListener("click", resetAcqForm);
   }
 
   function switchView(view) {
     state.view = view;
-    document.querySelectorAll(".nav-item").forEach((t) =>
+    document.querySelectorAll(".dock-item").forEach((t) =>
       t.classList.toggle("active", t.dataset.view === view));
-    document.querySelectorAll(".nav-group").forEach((g) =>
-      g.classList.toggle("current", !!g.querySelector(`.nav-item[data-view="${view}"]`)));
     document.querySelectorAll(".view").forEach((v) => { v.hidden = true; });
-    $(`#view-${view === "alert-config" ? "alert-config" : view}`).hidden = false;
-    document.body.classList.remove("nav-open");
+    $(`#view-${view}`).hidden = false;
+    $(".content").scrollTop = 0;
 
     if (view === "projects") loadProjects();
     if (view === "credentials") loadCredentials();
     if (view === "points") loadPoints();
     if (view === "documents") loadDocuments();
+    if (view === "profitability") loadProfitability();
     if (view === "alert-config") loadRules();
   }
 
@@ -391,46 +401,59 @@
   function renderKpis(s, alerts) {
     const activeAlerts = alerts.filter((a) => !a.acknowledged);
     const critical = activeAlerts.filter((a) => a.severity === "CRITICAL").length;
+
+    // Señalización: umbrales calibrados sobre los datos demo (aprobación
+    // normal 88–93 %, reembolsos 1–4 %). Solo salta ante degradación real.
+    const approval = s.tx.approvalRate;
+    const declineRisk = approval != null && approval < 85;
+    const refundRisk = s.refunds.pctOfVolume != null && s.refunds.pctOfVolume > 5;
+
     const delta = s.volume.deltaPct;
     const deltaHtml = delta == null ? '<span class="tt-muted">sin periodo previo</span>'
       : `<span class="delta ${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${pct(Math.abs(delta))}</span> vs periodo anterior`;
 
+    const approvalHtml = approval == null ? "—"
+      : `<b class="${declineRisk ? "sig-bad" : "sig-ok"}">${pct(approval)} aprobación</b>`;
+
     $("#kpis").innerHTML = `
-      <div class="kpi">
-        <div class="kpi-accent" style="background:${SERIES[0]}"></div>
+      <div class="kpi" style="--kpi-accent:${SERIES[0]}">
         <div class="kpi-label">Volumen procesado</div>
         <div class="kpi-value">${money(s.volume.total)}</div>
         <div class="kpi-foot">${deltaHtml}</div>
       </div>
-      <div class="kpi">
-        <div class="kpi-accent" style="background:${SERIES[1]}"></div>
+      <div class="kpi ${declineRisk ? "risk" : ""}" style="--kpi-accent:${declineRisk ? "var(--status-critical)" : SERIES[1]}">
         <div class="kpi-label">Transacciones</div>
         <div class="kpi-value">${int(s.tx.total)}</div>
-        <div class="kpi-foot">${int(s.tx.approved)} aprobadas · ${int(s.tx.declined)} rechazadas · ${pct(s.tx.approvalRate)} aprobación</div>
+        <div class="kpi-foot">${int(s.tx.approved)} aprobadas · <span class="sig-bad">${int(s.tx.declined)} rechazadas</span> · ${approvalHtml}</div>
       </div>
-      <div class="kpi">
-        <div class="kpi-accent" style="background:${SERIES[3]}"></div>
+      <div class="kpi ${refundRisk ? "risk" : ""}" style="--kpi-accent:${refundRisk ? "var(--status-warning)" : SERIES[3]}">
         <div class="kpi-label">Índice de reembolsos</div>
         <div class="kpi-value">${pct(s.refunds.pctOfVolume)}</div>
         <div class="kpi-foot">${moneyC(s.refunds.amount)} en ${int(s.refunds.count)} reembolsos</div>
       </div>
-      <div class="kpi">
-        <div class="kpi-accent" style="background:${critical ? "var(--status-critical)" : "var(--pf-gray)"}"></div>
+      <div class="kpi ${critical ? "risk" : ""}" style="--kpi-accent:${critical ? "var(--status-critical)" : (activeAlerts.length ? "var(--status-warning)" : "var(--status-good)")}">
         <div class="kpi-label">Alertas activas</div>
         <div class="kpi-value">${activeAlerts.length}</div>
-        <div class="kpi-foot">${critical ? `${critical} crítica${critical > 1 ? "s" : ""}` : "sin alertas críticas"}</div>
+        <div class="kpi-foot">${critical ? `<span class="sig-bad">${critical} crítica${critical > 1 ? "s" : ""}, la revisamos contigo</span>` : (activeAlerts.length ? "ninguna crítica, todo bajo control" : "todo en orden por ahora")}</div>
       </div>`;
 
     const pill = $("#alert-pill");
     pill.hidden = activeAlerts.length === 0;
     $("#alert-pill-count").textContent =
       `${activeAlerts.length} alerta${activeAlerts.length !== 1 ? "s" : ""}`;
+
+    const sub = $("#alert-count-sub");
+    if (sub) {
+      sub.textContent = activeAlerts.length
+        ? `${activeAlerts.length} activa${activeAlerts.length !== 1 ? "s" : ""}${critical ? ` · ${critical} crítica${critical > 1 ? "s" : ""}` : ""}`
+        : "";
+    }
   }
 
   function renderAlerts(alerts) {
     const el = $("#alert-list");
     if (!alerts.length) {
-      el.innerHTML = '<div class="empty">Sin alertas activas. Todo el procesamiento dentro de los umbrales.</div>';
+      el.innerHTML = '<div class="empty">Todo en orden: no hay alertas activas. Seguimos monitoreando por ti.</div>';
       return;
     }
     el.innerHTML = alerts.map((a) => `
@@ -503,7 +526,7 @@
   function renderDrTable(s) {
     const el = $("#dr-table");
     if (!s.topDeclineCodes.length) {
-      el.innerHTML = '<div class="empty">Sin rechazos en el periodo.</div>';
+      el.innerHTML = '<div class="empty">Sin rechazos en el periodo. ¡Buen trabajo!</div>';
       return;
     }
     el.innerHTML = `
@@ -557,7 +580,7 @@
     const chartEl = $("#chart-compare");
     const tableEl = $("#compare-table");
     if (state.compareSelection.length < 2) {
-      chartEl.innerHTML = '<div class="empty">Elige al menos 2 comercios para comparar.</div>';
+      chartEl.innerHTML = '<div class="empty">Elige al menos 2 comercios y te los comparamos aquí.</div>';
       tableEl.innerHTML = "";
       return;
     }
@@ -650,7 +673,7 @@
             </tr>`).join("")}
         </tbody>
       </table></div>
-      ${rows.length === 0 ? '<div class="empty">Sin credenciales con esos filtros.</div>' : ""}`;
+      ${rows.length === 0 ? '<div class="empty">No encontramos credenciales con esos filtros. Prueba ajustándolos.</div>' : ""}`;
 
     document.querySelectorAll("[data-resend]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -681,12 +704,17 @@
             </tr>`).join("")}
         </tbody>
       </table></div>
-      ${points.length === 0 ? '<div class="empty">Sin puntos de pago registrados.</div>' : ""}`;
+      ${points.length === 0 ? '<div class="empty">Todavía no hay puntos de pago registrados.</div>' : ""}`;
   }
 
   // ---------- documentos ----------
 
   const DOC_ICON = '<svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M6 2h9l5 5v15H6V2zm8 1.5V8h4.5L14 3.5zM8 12h8v2H8v-2zm0 4h8v2H8v-2z"/></svg>';
+  const RECO_ICON = '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 2 9.2 8.6 2 9.2l5.5 4.7L5.8 21 12 17.3 18.2 21l-1.7-7.1L22 9.2l-7.2-.6L12 2z"/></svg>';
+  const WARN_ICON = '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 2 22 20H2L12 2zm-1 6v6h2V8h-2zm0 8v2h2v-2h-2z"/></svg>';
+
+  // documentos con archivo abrible (formularios/plantillas)
+  const DOC_LINKS = { "D-008": "ficha-comercio.html" };
 
   async function loadDocuments() {
     const docs = await api("/api/documents");
@@ -703,10 +731,182 @@
                 <h3>${esc(d.title)}</h3>
                 <p>${esc(d.description)}</p>
                 <div class="doc-date">Actualizado ${fmtDate.format(parseDay(d.updatedAt))}</div>
+                ${DOC_LINKS[d.id] ? `<a class="doc-open" href="${DOC_LINKS[d.id]}" target="_blank" rel="noopener">Abrir formulario →</a>` : ""}
               </div>
             </div>`).join("")}
         </div>
       </div>`).join("");
+  }
+
+  // ---------- rentabilidad por adquirente ----------
+
+  let acquirersCache = [];
+
+  // tasa guardada como fracción (0.035) → texto en % (3.5%)
+  const ratePct = (frac) => `${(Number(frac || 0) * 100).toLocaleString("es-PA", { maximumFractionDigits: 2 })}%`;
+
+  async function loadProfitability() {
+    acquirersCache = await api("/api/acquirers");
+    renderAcquirers();
+  }
+
+  function renderAcquirers() {
+    const el = $("#acquirers-list");
+    if (!acquirersCache.length) {
+      el.innerHTML = '<div class="empty">Aún no hay adquirentes. Agrega el primero con el formulario de la derecha y aparecerá en la comparación.</div>';
+      return;
+    }
+    el.innerHTML = acquirersCache.map((a) => `
+      <div class="rule-item">
+        <div class="rule-body">
+          <div class="rule-name">${esc(a.name)}</div>
+          <div class="rule-desc">Nacional ${ratePct(a.nationalCostRate)} · Internacional ${ratePct(a.internationalCostRate)} · ${moneyC(a.fixedCostPerTx)} por trx${a.monthlyFixedCost ? ` · ${moneyC(a.monthlyFixedCost)} fijo mensual` : ""}</div>
+        </div>
+        <button class="btn btn-ghost" data-edit-acq="${esc(a.id)}" title="Editar">Editar</button>
+        <button class="btn btn-ghost" data-del-acq="${esc(a.id)}" title="Eliminar">✕</button>
+      </div>`).join("");
+
+    el.querySelectorAll("[data-edit-acq]").forEach((btn) => {
+      btn.addEventListener("click", () => editAcquirer(btn.dataset.editAcq));
+    });
+    el.querySelectorAll("[data-del-acq]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await api(`/api/acquirers/${encodeURIComponent(btn.dataset.delAcq)}`, { method: "DELETE" });
+        await loadProfitability();
+      });
+    });
+  }
+
+  function editAcquirer(id) {
+    const a = acquirersCache.find((x) => x.id === id);
+    if (!a) return;
+    $("#a-id").value = a.id;
+    $("#a-name").value = a.name;
+    $("#a-nat-rate").value = +(a.nationalCostRate * 100).toFixed(4);
+    $("#a-intl-rate").value = +(a.internationalCostRate * 100).toFixed(4);
+    $("#a-fee").value = a.fixedCostPerTx;
+    $("#a-monthly").value = a.monthlyFixedCost;
+    $("#acq-form-title").textContent = "Editar adquirente";
+    $("#acq-submit").textContent = "Guardar cambios";
+    $("#acq-cancel").hidden = false;
+    $("#a-name").focus();
+  }
+
+  function resetAcqForm() {
+    $("#acq-form").reset();
+    $("#a-id").value = "";
+    $("#a-monthly").value = "0";
+    $("#acq-form-title").textContent = "Nuevo adquirente";
+    $("#acq-submit").textContent = "Agregar adquirente";
+    $("#acq-cancel").hidden = true;
+  }
+
+  async function onAcqSubmit(ev) {
+    ev.preventDefault();
+    const id = $("#a-id").value;
+    const body = {
+      name: $("#a-name").value.trim(),
+      nationalCostRate: (Number($("#a-nat-rate").value) || 0) / 100,
+      internationalCostRate: (Number($("#a-intl-rate").value) || 0) / 100,
+      fixedCostPerTx: Number($("#a-fee").value) || 0,
+      monthlyFixedCost: Number($("#a-monthly").value) || 0,
+    };
+    await api(id ? `/api/acquirers/${encodeURIComponent(id)}` : "/api/acquirers", {
+      method: id ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    resetAcqForm();
+    await loadProfitability();
+  }
+
+  async function onCalcSubmit(ev) {
+    ev.preventDefault();
+    const body = {
+      merchantName: $("#c-name").value.trim(),
+      natVol: Number($("#c-nat-vol").value) || 0,
+      natTx: Number($("#c-nat-tx").value) || 0,
+      intlVol: Number($("#c-intl-vol").value) || 0,
+      intlTx: Number($("#c-intl-tx").value) || 0,
+      pfRate: (Number($("#c-pf-rate").value) || 0) / 100,
+      pfFee: Number($("#c-pf-fee").value) || 0,
+    };
+    const res = await api("/api/profitability/calculate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    renderCalcResult(res);
+  }
+
+  function renderCalcResult(res) {
+    const el = $("#calc-result");
+    const who = res.merchantName ? esc(res.merchantName) : "el comercio";
+
+    if (!res.rows.length) {
+      el.innerHTML = `
+        <div class="calc-empty card">
+          <div class="empty">Aún no hay adquirentes para comparar. Agrega al menos uno abajo y volvemos a calcular al instante.</div>
+        </div>`;
+      return;
+    }
+    if (res.totalVol === 0 && res.totalTx === 0) {
+      el.innerHTML = `
+        <div class="calc-empty card">
+          <div class="empty">Ingresa el volumen y las transacciones de ${who} para comparar la rentabilidad por adquirente.</div>
+        </div>`;
+      return;
+    }
+
+    const best = res.rows[0];
+    const bestPositive = best.profit >= 0;
+    const callout = `
+      <div class="reco ${bestPositive ? "" : "reco-warn"}">
+        <div class="reco-ico">${bestPositive ? RECO_ICON : WARN_ICON}</div>
+        <div class="reco-body">
+          <div class="reco-kicker">${bestPositive ? "Adquirente más rentable" : "Mejor opción disponible (margen negativo)"}</div>
+          <div class="reco-title">${esc(best.acquirerName)} — ${pct(best.profitabilityPct)} de margen</div>
+          <div class="reco-sub">Con ${who}, PagueloFacil gana <b>${moneyC(best.profit)}</b> al mes sobre un ingreso de ${moneyC(best.pfRevenue)}. ${bestPositive ? "Es el mejor destino para afiliar este comercio." : "Ningún adquirente deja ganancia con estos números; revisa el pricing o los costos."}</div>
+        </div>
+      </div>`;
+
+    const summary = `
+      <div class="calc-summary">
+        <span>Volumen total <b>${moneyC(res.totalVol)}</b></span>
+        <span>Transacciones <b>${int(res.totalTx)}</b></span>
+        <span>Pricing PF <b>${ratePct(res.pfRate)} + ${moneyC(res.pfFee)}/trx</b></span>
+        <span>Ingreso PF <b>${moneyC(res.pfRevenue)}</b></span>
+      </div>`;
+
+    const rows = res.rows.map((r, i) => {
+      const profitClass = r.profit < 0 ? "neg" : "pos";
+      return `
+        <tr class="${i === 0 ? "top-row" : ""}">
+          <td>${i === 0 ? '<span class="rank-badge">1º</span>' : `<span class="rank-num">${i + 1}º</span>`}${esc(r.acquirerName)}</td>
+          <td class="num">${moneyC(r.pfRevenue)}</td>
+          <td class="num">${moneyC(r.acquirerCost)}
+            <div class="cost-break">Nac ${moneyC(r.nationalCost)} · Int ${moneyC(r.internationalCost)} · Trx ${moneyC(r.txCost)}${r.monthlyFixed ? ` · Fijo ${moneyC(r.monthlyFixed)}` : ""}</div>
+          </td>
+          <td class="num ${profitClass}"><b>${moneyC(r.profit)}</b></td>
+          <td class="num ${profitClass}">${pct(r.profitabilityPct)}</td>
+        </tr>`;
+    }).join("");
+
+    el.innerHTML = `
+      <div class="card calc-result-card">
+        ${callout}
+        ${summary}
+        <div class="table-wrap"><table class="data calc-table">
+          <thead><tr>
+            <th>Adquirente</th>
+            <th class="num">Ingreso PF</th>
+            <th class="num">Costo adquirente</th>
+            <th class="num">Ganancia</th>
+            <th class="num">Rentabilidad</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </div>`;
   }
 
   // ---------- reglas de alertas ----------
@@ -779,6 +979,8 @@
   init().catch((err) => {
     console.error(err);
     document.body.insertAdjacentHTML("beforeend",
-      `<div style="position:fixed;bottom:12px;left:12px;background:#FBE7E7;color:#8f1f1f;padding:10px 14px;border-radius:10px;font-size:13px">Error cargando datos: ${esc(err.message)}</div>`);
+      `<div style="position:fixed;bottom:12px;left:12px;background:var(--red-100);color:var(--red-700);padding:12px 16px;border-radius:12px;font-size:13px;max-width:340px;box-shadow:0 6px 20px rgba(20,30,40,.14)">` +
+      `Tuvimos un problema al cargar tus datos. Ya estamos en ello; vuelve a intentarlo en un momento.` +
+      `<span style="display:block;color:var(--muted);font-size:11.5px;margin-top:4px">${esc(err.message)}</span></div>`);
   });
 })();

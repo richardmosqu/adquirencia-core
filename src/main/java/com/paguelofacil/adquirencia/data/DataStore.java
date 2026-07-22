@@ -49,6 +49,7 @@ public class DataStore {
     private final List<Credential> credentials = new CopyOnWriteArrayList<>();
     private final List<PaymentPoint> paymentPoints = new ArrayList<>();
     private final List<DocumentItem> documents = new ArrayList<>();
+    private final List<Acquirer> acquirers = new CopyOnWriteArrayList<>();
 
     private long txSeq = 1;
 
@@ -62,6 +63,7 @@ public class DataStore {
         seedCredentials(rnd);
         seedPaymentPoints(rnd);
         seedDocuments();
+        seedAcquirers();
     }
 
     private void seedMerchants() {
@@ -342,6 +344,20 @@ public class DataStore {
         documents.add(new DocumentItem("D-007", "Checklist de certificación de comercio",
                 "Certificaciones", "Requisitos para certificar un comercio nuevo en cada procesador.",
                 today.minusDays(21)));
+        documents.add(new DocumentItem("D-008", "Ficha de datos del comercio prospecto",
+                "Afiliación", "Formulario que llena el comercio con su volumen y transacciones "
+                        + "nacionales e internacionales para evaluar su rentabilidad por adquirente.",
+                today));
+    }
+
+    /**
+     * Adquirentes de ejemplo con costos de referencia. Cada adquirente nos
+     * reporta sus propios costos; se editan desde la calculadora de rentabilidad
+     * y cualquiera que se agregue aquí aparece automáticamente como opción.
+     */
+    private void seedAcquirers() {
+        acquirers.add(new Acquirer("AQ-001", "PowerTranz", 0.0195, 0.0290, 0.10, 0));
+        acquirers.add(new Acquirer("AQ-002", "Evertec", 0.0210, 0.0275, 0.12, 150));
     }
 
     public List<Merchant> merchants() { return merchants; }
@@ -351,4 +367,5 @@ public class DataStore {
     public List<Credential> credentials() { return credentials; }
     public List<PaymentPoint> paymentPoints() { return paymentPoints; }
     public List<DocumentItem> documents() { return documents; }
+    public List<Acquirer> acquirers() { return acquirers; }
 }
