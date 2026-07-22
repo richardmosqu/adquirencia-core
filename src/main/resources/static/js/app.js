@@ -1432,7 +1432,7 @@
       const opc = c["codigoOperacion" + b.key] || "";
       const kind = test === "OK" ? "good" : test === "Falló" ? "serious" : "warning";
       return `<div class="brand-test">
-        <div class="bt-head"><span class="bt-name">${esc(b.short)}</span> ${chip(test, kind)}</div>
+        <div class="bt-head"><span class="bt-name">${esc(b.label)}</span> ${chip(test, kind)}</div>
         <div class="bt-actions">
           ${TEST_STATES.map((t) => `<button class="btn btn-sm ${t === test ? "btn-primary" : ""}" data-brand="${b.key}" data-result="${t}">${t}</button>`).join("")}
         </div>
@@ -1478,14 +1478,15 @@
         </div>
       </div>
 
+      ${c.status === "Recibido" ? `
       <div class="dash-block">
-        <div class="block-label">Pruebas por marca (MC · VISA · AMEX)</div>
+        <div class="block-label">Pruebas por marca (Mastercard · VISA · AMEX)</div>
         <div class="card">
           <p class="view-sub" style="margin-bottom:14px">Las pruebas se ejecutan en el core real de PagueloFacil. Aquí solo registras el resultado y el código de operación por marca.</p>
           <div class="brand-tests">${brands}</div>
           ${refund}
         </div>
-      </div>
+      </div>` : ""}
 
       <div class="dash-block">
         <div class="block-label">Datos del expediente</div>
