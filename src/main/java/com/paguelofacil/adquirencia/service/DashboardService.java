@@ -37,7 +37,8 @@ public class DashboardService {
     public record RefundKpi(long count, BigDecimal amount, Double pctOfVolume) {}
 
     public record ProcessorSlice(String processor, String label, BigDecimal volume, long txCount,
-                                 Double approvalRate, Double sharePct) {}
+                                 Double approvalRate, Double sharePct,
+                                 BigDecimal previousVolume, long previousTxCount, Double deltaPct) {}
 
     public record ServiceSlice(String service, String label, BigDecimal volume, long txCount, Double sharePct) {}
 
@@ -46,7 +47,7 @@ public class DashboardService {
 
     public record DailyPoint(LocalDate date, BigDecimal volume, long txCount, long approved, long declined) {}
 
-    public record DrCodeCount(String code, String description, long count, Double pctOfDeclined) {}
+    public record DrCodeCount(String code, String description, String action, long count, Double pctOfDeclined) {}
 
     public record Summary(Range range, Range previousRange, VolumeKpi volume, TxKpi tx, RefundKpi refunds,
                           List<ProcessorSlice> processors, List<ServiceSlice> services, ThreeDsKpi threeDs,
@@ -93,20 +94,33 @@ public class DashboardService {
                         : round1(refundAmount.multiply(BigDecimal.valueOf(100))
                                 .divide(volume, 4, RoundingMode.HALF_UP).doubleValue()));
 
-        // Por procesador
+        // Por procesador (con comparativa contra el periodo anterior)
+        List<Transaction> prevSales = previous.stream()
+                .filter(t -> t.type() == Transaction.TxType.SALE).toList();
         List<ProcessorSlice> processors = new ArrayList<>();
         Map<Processor, List<Transaction>> byProc = new EnumMap<>(Processor.class);
-        for (Processor p : Processor.values()) byProc.put(p, new ArrayList<>());
+        Map<Processor, List<Transaction>> byProcPrev = new EnumMap<>(Processor.class);
+        for (Processor p : Processor.values()) {
+            byProc.put(p, new ArrayList<>());
+            byProcPrev.put(p, new ArrayList<>());
+        }
         sales.forEach(t -> byProc.get(t.processor()).add(t));
+        prevSales.forEach(t -> byProcPrev.get(t.processor()).add(t));
         for (Processor p : Processor.values()) {
             List<Transaction> list = byProc.get(p);
+            List<Transaction> prevList = byProcPrev.get(p);
             long ok = list.stream().filter(Transaction::approved).count();
             BigDecimal vol = sum(list.stream().filter(Transaction::approved).toList());
+            BigDecimal prevVol = sum(prevList.stream().filter(Transaction::approved).toList());
+            Double procDelta = prevVol.signum() == 0 ? null
+                    : round1(vol.subtract(prevVol).multiply(BigDecimal.valueOf(100))
+                            .divide(prevVol, 4, RoundingMode.HALF_UP).doubleValue());
             processors.add(new ProcessorSlice(p.name(), p.getLabel(), vol, list.size(),
                     rate(ok, list.size()),
                     volume.signum() == 0 ? null
                             : round1(vol.multiply(BigDecimal.valueOf(100))
-                                    .divide(volume, 4, RoundingMode.HALF_UP).doubleValue())));
+                                    .divide(volume, 4, RoundingMode.HALF_UP).doubleValue()),
+                    prevVol, prevList.size(), procDelta));
         }
 
         // Por servicio
@@ -153,6 +167,7 @@ public class DashboardService {
                 .limit(6)
                 .map(e -> new DrCodeCount(e.getKey(),
                         DataStore.DR_CODES.getOrDefault(e.getKey(), "Código de rechazo"),
+                        DataStore.DR_ACTIONS.getOrDefault(e.getKey(), DataStore.ACT_PF),
                         e.getValue(), rate(e.getValue(), totalDeclined)))
                 .toList();
 

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Códigos de rechazo (DR) · PagueloFacil</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%236BBE22'/%3E%3Cpath d='M16 6a10 10 0 1 0 10 10h-5a5 5 0 1 1-5-5z' fill='%23fff'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --green-500: #6BBE22; --green-100: #EDFFD6; --green-700: #55990F; --green-800: #175E1A;
+      --teal-100: #EAFEF5; --teal-700: #0E7E5D;
+      --amber-100: #FFF6D6; --amber-800: #663800;
+      --ink: #1e2227; --ink-2: #515a69; --muted: #7d889b;
+      --line: #E9EBEE; --gray-100: #FAFBFB; --gray-200: #F2F3F5;
+      --radius: 16px; --font: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); color: var(--ink); background: var(--gray-200); font-size: 13.5px; line-height: 1.5; padding: 28px 16px 60px; }
+    .sheet { max-width: 940px; margin: 0 auto; background: #fff; border-radius: var(--radius); box-shadow: 0 1px 3px rgba(20,30,40,.08); overflow: hidden; }
+    .sheet-head { display: flex; align-items: center; gap: 12px; padding: 22px 30px; border-bottom: 3px solid var(--green-500); }
+    .logo-mark { width: 32px; height: 32px; }
+    .brand .name { font-size: 19px; font-weight: 700; letter-spacing: -.3px; }
+    .brand .tag { font-size: 11.5px; font-weight: 600; color: var(--green-800); background: var(--green-100); border-radius: 999px; padding: 3px 10px; display: inline-block; margin-top: 2px; }
+    .sheet-body { padding: 24px 30px 30px; }
+    h1 { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+    .intro { font-size: 13px; color: var(--ink-2); margin: 4px 0 18px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+    .pill { font-size: 11.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+    .issuer { background: var(--teal-100); color: var(--teal-700); }
+    .pf { background: var(--amber-100); color: var(--amber-800); }
+    .auth { background: var(--green-100); color: var(--green-700); }
+    .card { background: var(--gray-200); color: var(--ink-2); }
+    .ok { background: var(--green-100); color: var(--green-700); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { position: sticky; top: 0; background: #fff; text-align: left; font-size: 12px; font-weight: 700; color: var(--ink); padding: 10px 12px; border-bottom: 2px solid var(--line); }
+    tbody td { padding: 9px 12px; border-bottom: 1px solid var(--gray-200); color: var(--ink-2); vertical-align: middle; }
+    tbody tr:hover { background: var(--gray-100); }
+    td.code { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    td.reason { color: var(--ink); }
+    .actions { display: flex; gap: 10px; margin: 20px 0 0; }
+    .btn { font-family: var(--font); font-size: 13.5px; font-weight: 600; border-radius: 999px; border: 1px solid var(--line); background: var(--gray-200); color: var(--ink); padding: 9px 20px; cursor: pointer; }
+    .btn-primary { background: var(--green-500); border-color: var(--green-500); color: #fff; }
+    .btn-primary:hover { background: var(--green-700); }
+    .foot { max-width: 940px; margin: 14px auto 0; text-align: center; font-size: 11.5px; color: var(--muted); }
+    @media print { body { background: #fff; padding: 0; } .sheet { box-shadow: none; max-width: 100%; } .actions { display: none; } thead th { position: static; } }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <header class="sheet-head">
+      <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="14" fill="#6BBE22"/>
+        <path d="M16 6a10 10 0 1 0 10 10h-5a5 5 0 1 1-5-5z" fill="#ffffff"/>
+      </svg>
+      <div class="brand">
+        <div class="name">PagueloFacil</div>
+        <span class="tag">Core de Adquirencia</span>
+      </div>
+    </header>
+    <div class="sheet-body">
+      <h1>Códigos de rechazo (DR)</h1>
+      <p class="intro">Referencia operativa oficial de respuestas de transacción. Cada código con su motivo y el plan de acción recomendado. Actualizado: 18/06/2026.</p>
+      <div class="legend">
+        <span class="pill ok">Aprobada</span>
+        <span class="pill issuer">Contactar al banco emisor</span>
+        <span class="pill pf">Contactar a PagueloFacil</span>
+        <span class="pill auth">Completar la autenticación</span>
+        <span class="pill card">Verificar datos de la tarjeta</span>
+      </div>
+      <table>
+        <thead><tr><th>Código</th><th>Motivo del rechazo</th><th>Plan de acción</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="window.print()">Imprimir / Guardar PDF</button>
+      </div>
+    </div>
+  </div>
+  <p class="foot">Fuente: documento maestro "Códigos de rechazo — Referencia operativa" de PagueloFacil. Uso interno del área de Adquirencia.</p>
+
+  <script>
+    // Catálogo oficial (código, motivo, plan de acción). Fuente única de verdad.
+    const ISSUER = ["issuer", "Contactar al banco emisor"];
+    const PF = ["pf", "Contactar a PagueloFacil"];
+    const AUTH = ["auth", "Completar la autenticación"];
+    const CARD = ["card", "Verificar datos de la tarjeta"];
+    const OK = ["ok", "Ninguna acción, aprobada"];
+    const CODES = [
+      ["0", "Aprobada", OK],
+      ["00", "Sin respuesta del banco emisor", ISSUER],
+      ["1", "Referir al emisor / retener tarjeta (perdida)", ISSUER],
+      ["2", "Referir al emisor / retener tarjeta (robada)", ISSUER],
+      ["3", "Aceptante o comercio inválido", ISSUER],
+      ["3D0", "Falla 3DS — el cliente canceló el challenge", AUTH],
+      ["3D1", "El emisor rechaza la autenticación y pide no autorizar", AUTH],
+      ["4", "Llamar al emisor / retener tarjeta", ISSUER],
+      ["5", "Denegada (Do Not Honor)", ISSUER],
+      ["6", "Error", ISSUER],
+      ["7", "Retener tarjeta (condición especial)", ISSUER],
+      ["8", "Aprobada con identificación", ISSUER],
+      ["9", "Tarjeta vencida", CARD],
+      ["10", "Aprobada por monto parcial", ISSUER],
+      ["11", "Denegada (Do Not Honor)", ISSUER],
+      ["12", "Transacción inválida", ISSUER],
+      ["13", "Fondos insuficientes / monto inválido", ISSUER],
+      ["14", "Tarjeta inválida o no registrada", CARD],
+      ["15", "Emisor no existe", ISSUER],
+      ["19", "Reintente la transacción", ISSUER],
+      ["20", "Respuesta inválida", ISSUER],
+      ["21", "No se realizó ninguna acción", ISSUER],
+      ["22", "Sospecha de mal funcionamiento", ISSUER],
+      ["25", "Registro no encontrado", ISSUER],
+      ["30", "Tarjeta restringida / error de formato", PF],
+      ["31", "Banco no soportado", ISSUER],
+      ["33", "Tarjeta vencida, retener", CARD],
+      ["34", "Sospecha de fraude, retener", ISSUER],
+      ["36", "Tarjeta restringida", ISSUER],
+      ["38", "Excedió intentos de PIN", ISSUER],
+      ["39", "Sin cuenta de crédito", ISSUER],
+      ["41", "Tarjeta perdida, retener", ISSUER],
+      ["43", "Tarjeta robada, retener", ISSUER],
+      ["51", "Fondos insuficientes", ISSUER],
+      ["54", "Tarjeta vencida", CARD],
+      ["55", "PIN incorrecto", CARD],
+      ["57", "Transacción no permitida al emisor", ISSUER],
+      ["58", "Transacción no permitida en la terminal", ISSUER],
+      ["59", "Sospecha de fraude", ISSUER],
+      ["60", "Contactar al adquirente", ISSUER],
+      ["61", "Excede límite de monto", ISSUER],
+      ["62", "Tarjeta restringida", ISSUER],
+      ["63", "Violación de seguridad", ISSUER],
+      ["65", "Excede límite de transacciones diarias", ISSUER],
+      ["75", "Excedió intentos de PIN permitidos", ISSUER],
+      ["76", "No se ubicó registro previo", PF],
+      ["77", "Error de conciliación", PF],
+      ["78", "Contactar al emisor / tarjeta bloqueada o inválida", ISSUER],
+      ["79", "CVV2 incorrecto", CARD],
+      ["80", "Lote duplicado", PF],
+      ["82", "CVV/ICVV incorrecto", CARD],
+      ["85", "Sin razón para rechazar (verificación OK)", ISSUER],
+      ["89", "ID de terminal inválido", PF],
+      ["90", "Cierre en proceso (cutoff)", PF],
+      ["91", "Emisor o switch fuera de servicio", ISSUER],
+      ["92", "Institución no encontrada / no se puede enrutar", PF],
+      ["93", "Transacción no permitida (violación de ley)", ISSUER],
+      ["94", "Mensaje o transacción duplicada", PF],
+      ["96", "Error de sistema / timeout interno", PF],
+      ["97", "Excede cantidad de retiros permitidos", ISSUER],
+      ["CE", "Error de comunicación", PF],
+      ["DB", "Error de acceso a base de datos", PF],
+      ["DR", "Rechazada por el motor de riesgo", PF],
+      ["ET", "Error de terminal / BIN", PF],
+      ["IA", "Monto inválido", PF],
+      ["IT", "Terminal inválida", PF],
+      ["NA", "Sistema no disponible", PF],
+      ["ND", "Reingrese la transacción", PF],
+      ["NV", "Transacción inválida", PF],
+      ["RR", "Error interno del web service", PF],
+      ["TO", "Reingrese la transacción (timeout)", PF],
+      ["WE", "Error interno del web service", PF],
+      ["XR", "Falla en la lectura de la respuesta", PF],
+    ];
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    document.getElementById("rows").innerHTML = CODES.map(([code, reason, act]) =>
+      `<tr><td class="code">${esc(code)}</td><td class="reason">${esc(reason)}</td>` +
+      `<td><span class="pill ${act[0]}">${esc(act[1])}</span></td></tr>`).join("");
+  </script>
+</body>
+</html>

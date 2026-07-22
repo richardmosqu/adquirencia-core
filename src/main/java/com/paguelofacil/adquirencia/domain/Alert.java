@@ -12,6 +12,8 @@ public record Alert(
         String merchantId,
         String merchantName,
         Processor processor,
+        String actionPlanId,
+        String actionPlanName,
         LocalDateTime triggeredAt,
         boolean acknowledged) {
 
@@ -19,6 +21,6 @@ public record Alert(
 
     public Alert acknowledge() {
         return new Alert(id, ruleId, ruleName, severity, message, merchantId, merchantName,
-                processor, triggeredAt, true);
+                processor, actionPlanId, actionPlanName, triggeredAt, true);
     }
 }

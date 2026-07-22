@@ -37,27 +37,6 @@ public class CatalogController {
         return store.projects();
     }
 
-    @GetMapping("/credentials")
-    public List<Credential> credentials() {
-        return store.credentials();
-    }
-
-    /** Simula el reenvío de una credencial al comercio (actualiza fecha y estado). */
-    @PostMapping("/credentials/{id}/resend")
-    public ResponseEntity<Credential> resend(@PathVariable String id) {
-        return store.credentials().stream()
-                .filter(c -> c.getId().equals(id))
-                .findFirst()
-                .map(c -> {
-                    c.setLastSentAt(LocalDateTime.now().withNano(0));
-                    if (!"Activa".equals(c.getStatus())) {
-                        c.setStatus("Pendiente");
-                    }
-                    return ResponseEntity.ok(c);
-                })
-                .orElse(ResponseEntity.notFound().build());
-    }
-
     @GetMapping("/payment-points")
     public List<PaymentPoint> paymentPoints() {
         return store.paymentPoints();
