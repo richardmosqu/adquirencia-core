@@ -18,11 +18,7 @@
     <header class="topbar">
       <div class="topbar-left">
         <a class="logo" href="#" aria-label="PagueloFacil">
-          <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true">
-            <circle cx="16" cy="16" r="14" fill="#6BBE22"/>
-            <path d="M16 6a10 10 0 1 0 10 10h-5a5 5 0 1 1-5-5z" fill="#ffffff"/>
-          </svg>
-          <span class="logo-text">PagueloFacil</span>
+          <img class="logo-img" src="img/logo-pf.svg" alt="PagueloFacil">
           <span class="logo-tag">Core de Adquirencia</span>
         </a>
       </div>
@@ -43,8 +39,14 @@
           <span class="topbar-user-name">Richard Mosqueda</span>
           <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7.4 8.6 12 13.2l4.6-4.6L18 10l-6 6-6-6z"/></svg>
         </span>
+        <button class="icon-btn header-toggle" id="header-toggle" type="button" title="Minimizar encabezado" aria-label="Minimizar encabezado">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6 15.6 12 9.6l6 6L16.6 17 12 12.4 7.4 17z"/></svg>
+        </button>
       </div>
     </header>
+    <button class="header-restore" id="header-restore" type="button" title="Mostrar encabezado" aria-label="Mostrar encabezado" hidden>
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6 9.6 12 15.6l6-6L16.6 8 12 12.6 7.4 8z"/></svg>
+    </button>
 
     <!-- ===================== CONTENIDO ===================== -->
     <main class="content">
