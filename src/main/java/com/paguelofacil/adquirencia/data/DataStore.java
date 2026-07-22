@@ -397,35 +397,118 @@ public class DataStore {
                 "En curso", "Richard Mosqueda", today));
     }
 
+    /** Estados del ciclo de vida de una credencial (en orden del pipeline). */
+    public static final String ST_SOLICITADO = "Solicitado";
+    public static final String ST_EN_ESPERA = "En espera de credenciales";
+    public static final String ST_RECIBIDO = "Recibido";
+    public static final String ST_EN_PRUEBAS = "En pruebas";
+    public static final String ST_VISTO_BUENO = "Visto bueno enviado";
+    public static final String ST_APROBADO = "Aprobado por BAC";
+    public static final String ST_HABILITADO = "Habilitado/Configurado";
+
+    /**
+     * Credenciales de demostración repartidas por todo el ciclo de vida, con
+     * banco (BAC / Towerbank), datos sensibles y control de pruebas por marca.
+     */
     private void seedCredentials(Random rnd) {
-        String[] types = {"MID", "TID", "API Key", "Terminal 3DS"};
-        LocalDateTime now = LocalDateTime.now();
-        int seq = 1;
-        for (Merchant m : merchants) {
-            int n = 1 + rnd.nextInt(3);
-            for (int i = 0; i < n; i++) {
-                Processor proc = rnd.nextBoolean() ? Processor.POWERTRANZ : Processor.EVERTEC;
-                String status = switch (rnd.nextInt(8)) {
-                    case 0 -> "Pendiente";
-                    case 1 -> "Vencida";
-                    default -> "Activa";
-                };
-                credentials.add(new Credential(String.format("C-%03d", seq++), m.id(), proc,
-                        dbaFor(m.name(), i), types[rnd.nextInt(types.length)], status,
-                        now.minusDays(rnd.nextInt(45)).minusHours(rnd.nextInt(12))));
-            }
-        }
-        // Escenario: una credencial mal configurada, visible en alertas de errores internos.
-        credentials.add(new Credential(String.format("C-%03d", seq), "28722", Processor.EVERTEC,
-                "MODAPLUS*ONLINE", "API Key", "Error de configuración", now.minusHours(6)));
+        // Solicitadas (recién pedidas al banco)
+        credentials.add(newCred("C-001", "28716", "BAC", Processor.POWERTRANZ, ST_SOLICITADO, 3));
+        credentials.add(newCred("C-002", "28723", "BAC", Processor.POWERTRANZ, ST_SOLICITADO, 6));
+
+        // En espera de credenciales (el banco procesa la afiliación ~30 días)
+        credentials.add(newCred("C-003", "28714", "Towerbank", Processor.EVERTEC, ST_EN_ESPERA, 20));
+        Credential c4 = newCred("C-004", "28720", "BAC", Processor.POWERTRANZ, ST_EN_ESPERA, 28);
+        c4.setObservaciones("Correo de seguimiento enviado a BAC; esperan respuesta esta semana.");
+        credentials.add(c4);
+
+        // Recibidas (llegaron por Mimecast, registradas, aún sin probar)
+        Credential c5 = newCred("C-005", "28715", "BAC", Processor.POWERTRANZ, ST_RECIBIDO, 35);
+        withSecrets(c5, "PT-28715-3DS", "Fv#2026bac", "AdmFV*2026", 1500, 25000);
+        credentials.add(c5);
+        Credential c6 = newCred("C-006", "28726", "Towerbank", Processor.EVERTEC, ST_RECIBIDO, 33);
+        withSecrets(c6, "EV-28726-STD", "Ts$Tower26", "AdmTS*2026", 3000, 60000);
+        credentials.add(c6);
+
+        // En pruebas (validando por marca en el core real; falta emitir reembolsos)
+        Credential c7 = newCred("C-007", "28722", "BAC", Processor.POWERTRANZ, ST_EN_PRUEBAS, 40);
+        withSecrets(c7, "PT-28722-3DS", "Mp!2026bac", "AdmMP*2026", 2000, 40000);
+        c7.setPruebaMc("OK"); c7.setCodigoOperacionMc("OP-778120");
+        c7.setPruebaVisa("OK"); c7.setCodigoOperacionVisa("OP-778144");
+        c7.setPruebaAmex("Pendiente");
+        c7.setReembolsosPruebas(false);
+        c7.setConfigError(true); // escenario: alimenta la alerta de errores internos
+        c7.setObservaciones("MC y VISA aprobadas. Falta probar AMEX y emitir los reembolsos de las pruebas al día siguiente.");
+        credentials.add(c7);
+
+        Credential c8 = newCred("C-008", "28717", "BAC", Processor.POWERTRANZ, ST_EN_PRUEBAS, 42);
+        withSecrets(c8, "PT-28717-3DS", "Ma@2026bac", "AdmMA*2026", 1200, 20000);
+        c8.setPruebaMc("OK"); c8.setCodigoOperacionMc("OP-779301");
+        c8.setPruebaVisa("Pendiente"); c8.setPruebaAmex("Pendiente");
+        c8.setReembolsosPruebas(false);
+        credentials.add(c8);
+
+        // Visto bueno enviado (pruebas OK y reembolsos hechos; esperando al banco)
+        Credential c9 = newCred("C-009", "28724", "BAC", Processor.POWERTRANZ, ST_VISTO_BUENO, 55);
+        withSecrets(c9, "PT-28724-3DS", "Cs%2026bac", "AdmCS*2026", 2500, 45000);
+        allTestsOk(c9);
+        c9.setObservaciones("Visto bueno enviado a BAC el lunes. Aprobación estimada en 1–2 semanas.");
+        credentials.add(c9);
+
+        // Aprobado por BAC (aprobada, lista para habilitar/configurar)
+        Credential c10 = newCred("C-010", "28719", "Towerbank", Processor.EVERTEC, ST_APROBADO, 70);
+        withSecrets(c10, "EV-28719-STD", "Al&2026tow", "AdmAL*2026", 1800, 30000);
+        allTestsOk(c10);
+        c10.setAprobadoPorBac(true);
+        credentials.add(c10);
+
+        // Habilitada/Configurada (migrada a producción, expediente cerrado)
+        Credential c11 = newCred("C-011", "28725", "BAC", Processor.POWERTRANZ, ST_HABILITADO, 90);
+        withSecrets(c11, "PT-28725-3DS", "Lb*2026bac", "AdmLB*2026", 2200, 38000);
+        allTestsOk(c11);
+        c11.setAprobadoPorBac(true);
+        c11.setFechaMigracion(LocalDate.now().minusDays(8));
+        c11.setObservaciones("Migrada y configurada en el enrutamiento del comercio. Expediente cerrado.");
+        credentials.add(c11);
     }
 
-    private String dbaFor(String merchantName, int idx) {
-        String base = merchantName.toUpperCase()
-                .replace(" ", "")
-                .replaceAll("[^A-Z0-9]", "");
-        base = base.substring(0, Math.min(10, base.length()));
-        return base + (idx == 0 ? "*PTY" : "*WEB" + idx);
+    private Credential newCred(String id, String merchantId, String bank, Processor proc,
+                               String status, int solicitudDaysAgo) {
+        Credential c = new Credential();
+        c.setId(id);
+        c.setMerchantId(merchantId);
+        c.setBank(bank);
+        c.setProcessor(proc);
+        c.setStatus(status);
+        c.setFechaSolicitud(LocalDate.now().minusDays(solicitudDaysAgo));
+        c.setAfiliado(afiliadoFor(merchantId));
+        c.setTarjetas("MC, VISA, AMEX");
+        c.setMonedas("USD");
+        c.setThreeDs(proc == Processor.POWERTRANZ);
+        c.setRebill(false);
+        return c;
+    }
+
+    private void withSecrets(Credential c, String ptId, String pass, String adminPw,
+                             double perTx, double monthly) {
+        c.setPowertranzId(ptId);
+        c.setContrasena(pass);
+        c.setPwAdminSite(adminPw);
+        c.setLimitePorTrx(perTx);
+        c.setLimiteMensual(monthly);
+    }
+
+    private void allTestsOk(Credential c) {
+        c.setPruebaMc("OK"); c.setCodigoOperacionMc("OP-" + (700000 + Math.abs(c.getId().hashCode()) % 90000));
+        c.setPruebaVisa("OK"); c.setCodigoOperacionVisa("OP-" + (600000 + Math.abs(c.getId().hashCode()) % 90000));
+        c.setPruebaAmex("OK"); c.setCodigoOperacionAmex("OP-" + (500000 + Math.abs(c.getId().hashCode()) % 90000));
+        c.setReembolsosPruebas(true);
+    }
+
+    private String afiliadoFor(String merchantId) {
+        String name = merchants.stream().filter(m -> m.id().equals(merchantId))
+                .map(Merchant::name).findFirst().orElse(merchantId);
+        String base = name.toUpperCase().replace(" ", "").replaceAll("[^A-Z0-9]", "");
+        return base.substring(0, Math.min(10, base.length())) + "*PTY";
     }
 
     private void seedPaymentPoints(Random rnd) {

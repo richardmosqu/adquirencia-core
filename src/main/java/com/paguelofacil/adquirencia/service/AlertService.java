@@ -359,7 +359,7 @@ public class AlertService {
                 long cfg = sales.stream()
                         .filter(t -> !t.approved() && "CFG".equals(t.drCode())).count();
                 long badCredentials = store.credentials().stream()
-                        .filter(c -> "Error de configuración".equals(c.getStatus())).count();
+                        .filter(com.paguelofacil.adquirencia.domain.Credential::isConfigError).count();
                 long total = cfg + badCredentials;
                 yield total > rule.getThreshold()
                         ? Optional.of(build(rule, severityByExcess(total, rule.getThreshold()),

@@ -55,6 +55,9 @@
     compareSelection: [],
     alerts: [],
     actionPlans: [],
+    credentials: [],
+    credView: "table",
+    credDetailId: null,
     view: "dashboard",
   };
 
@@ -346,8 +349,28 @@
     $("#rule-form").addEventListener("submit", onCreateRule);
     $("#ap-form").addEventListener("submit", onCreatePlan);
 
-    $("#cred-proc-filter").addEventListener("change", renderCredentials);
-    $("#cred-status-filter").addEventListener("change", renderCredentials);
+    $("#cred-view-table").addEventListener("click", () => setCredView("table"));
+    $("#cred-view-kanban").addEventListener("click", () => setCredView("kanban"));
+    $("#cred-status-filter").addEventListener("change", renderCredBody);
+    $("#cred-bank-filter").addEventListener("change", renderCredBody);
+    $("#cred-merchant-filter").addEventListener("change", renderCredBody);
+    $("#cred-refund-filter").addEventListener("change", renderCredBody);
+    $("#cred-new").addEventListener("click", () => openCredForm(null));
+
+    // copiar al portapapeles cualquier campo con [data-copy]
+    document.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-copy]");
+      if (!btn) return;
+      if (navigator.clipboard) navigator.clipboard.writeText(btn.dataset.copy).catch(() => {});
+      const prev = btn.innerHTML;
+      btn.innerHTML = CHECK_ICON;
+      btn.classList.add("copied");
+      setTimeout(() => { btn.innerHTML = prev; btn.classList.remove("copied"); }, 1100);
+    });
+    // Esc cierra el modal abierto
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && !$("#modal-root").hidden) closeModal();
+    });
 
     $("#calc-form").addEventListener("submit", onCalcSubmit);
     $("#calc-reset").addEventListener("click", () => { $("#calc-result").innerHTML = ""; });
@@ -373,12 +396,19 @@
 
   const KNOWN_VIEWS = ["dashboard", "alert-config", "profitability", "projects", "credentials", "points", "documents"];
 
-  // Deep-link por hash: #alert=<id> abre el detalle; #<vista> abre la vista.
+  // Deep-link por hash: #alert=<id> / #cred=<id> abren el detalle; #<vista> abre la vista.
   function handleHash() {
     const h = (location.hash || "").replace(/^#/, "");
     if (!h) return;
     if (h.startsWith("alert=")) { loadAlertDetail(decodeURIComponent(h.slice(6))); return; }
+    if (h.startsWith("cred=")) { openCredFromHash(decodeURIComponent(h.slice(5))); return; }
+    if (h === "credentials-kanban") { switchView("credentials"); setTimeout(() => setCredView("kanban"), 500); return; }
     if (KNOWN_VIEWS.includes(h)) switchView(h);
+  }
+
+  async function openCredFromHash(id) {
+    if (!state.credentials.length) await loadCredentials();
+    openCredDetail(id);
   }
 
   // Abre el dashboard y despliega el detalle inline de la alerta más importante.
@@ -1028,52 +1058,465 @@
       </div>`).join("");
   }
 
-  // ---------- credenciales ----------
+  // ---------- credenciales (ciclo de vida) ----------
 
-  let credentialsCache = [];
+  // Pipeline de estados en orden. col = etiqueta corta para el tablero Kanban.
+  const CRED_STATUSES = [
+    { key: "Solicitado", col: "Solicitado", kind: "warning" },
+    { key: "En espera de credenciales", col: "En espera", kind: "warning" },
+    { key: "Recibido", col: "Recibido", kind: "neutral" },
+    { key: "En pruebas", col: "En pruebas", kind: "warning" },
+    { key: "Visto bueno enviado", col: "Visto bueno enviado", kind: "neutral" },
+    { key: "Aprobado por BAC", col: "Aprobado por BAC", kind: "good" },
+    { key: "Habilitado/Configurado", col: "Habilitado", kind: "good" },
+  ];
+  const CRED_BANKS = ["BAC", "Towerbank"];
+  const CRED_BRANDS = [
+    { key: "Mc", label: "Mastercard", short: "MC" },
+    { key: "Visa", label: "VISA", short: "VISA" },
+    { key: "Amex", label: "AMEX", short: "AMEX" },
+  ];
+  const TEST_STATES = ["Pendiente", "OK", "Falló"];
+
+  const COPY_ICON = '<svg viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>';
+  const CHECK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>';
+
+  const statusMeta = (key) => CRED_STATUSES.find((s) => s.key === key) || { col: key, kind: "neutral" };
+  const statusIndex = (key) => CRED_STATUSES.findIndex((s) => s.key === key);
+  const credStatusChip = (key) => chip(statusMeta(key).col, statusMeta(key).kind);
+  const procLabel = (p) => (p === "POWERTRANZ" ? "PowerTranz" : "Evertec");
+  const anyBrandOk = (c) => CRED_BRANDS.some((b) => c["prueba" + b.key] === "OK");
+  const refundPending = (c) => anyBrandOk(c) && !c.reembolsosPruebas;
+  const isoToday = () => new Date().toISOString().slice(0, 10);
 
   async function loadCredentials() {
-    credentialsCache = await api("/api/credentials");
-    renderCredentials();
+    state.credentials = await api("/api/credentials");
+    populateCredFilters();
+    renderCredBody();
   }
 
-  function renderCredentials() {
-    const proc = $("#cred-proc-filter").value;
-    const status = $("#cred-status-filter").value;
-    const rows = credentialsCache
-      .filter((c) => !proc || c.processor === proc)
-      .filter((c) => !status || c.status === status);
+  function populateCredFilters() {
+    const st = $("#cred-status-filter"), bk = $("#cred-bank-filter"), me = $("#cred-merchant-filter");
+    if (st.options.length <= 1) {
+      CRED_STATUSES.forEach((s) => st.append(new Option(s.key, s.key)));
+      CRED_BANKS.forEach((b) => bk.append(new Option(b, b)));
+      state.merchants.forEach((m) => me.append(new Option(`${m.name} (${m.id})`, m.id)));
+    }
+  }
 
-    $("#credentials-table").innerHTML = `
+  function setCredView(v) {
+    state.credView = v;
+    $("#cred-view-table").classList.toggle("active", v === "table");
+    $("#cred-view-kanban").classList.toggle("active", v === "kanban");
+    renderCredBody();
+  }
+
+  function filteredCreds() {
+    const st = $("#cred-status-filter").value;
+    const bk = $("#cred-bank-filter").value;
+    const me = $("#cred-merchant-filter").value;
+    const onlyRefund = $("#cred-refund-filter").checked;
+    return state.credentials
+      .filter((c) => !st || c.status === st)
+      .filter((c) => !bk || c.bank === bk)
+      .filter((c) => !me || c.merchantId === me)
+      .filter((c) => !onlyRefund || refundPending(c));
+  }
+
+  function renderCredBody() {
+    const list = filteredCreds();
+    if (state.credView === "kanban") renderCredKanban(list);
+    else renderCredTable(list);
+  }
+
+  function renderCredTable(list) {
+    const el = $("#credentials-body");
+    el.innerHTML = `
       <div class="table-wrap"><table class="data">
         <thead><tr>
-          <th>ID</th><th>Comercio</th><th>Procesador</th><th>DBA</th><th>Tipo</th><th>Estado</th><th>Último envío</th><th></th>
+          <th>ID</th><th>Comercio</th><th>Banco</th><th>Procesador</th><th>Afiliado</th>
+          <th>Estado</th><th>Observaciones</th><th></th>
         </tr></thead>
         <tbody>
-          ${rows.map((c) => `
+          ${list.map((c) => `
             <tr>
               <td>${esc(c.id)}</td>
-              <td>${esc(merchantLabel(c.merchantId))}</td>
-              <td>${c.processor === "POWERTRANZ" ? "PowerTranz" : "Evertec"}</td>
-              <td><code>${esc(c.dba)}</code></td>
-              <td>${esc(c.credentialType)}</td>
-              <td>${chip(c.status)}</td>
-              <td>${c.lastSentAt ? fmtDateTime.format(new Date(c.lastSentAt)) : "—"}</td>
-              <td><button class="btn" data-resend="${esc(c.id)}">Reenviar</button></td>
+              <td><a class="cell-link" data-cred-detail="${esc(c.id)}">${esc(merchantLabel(c.merchantId))}</a></td>
+              <td>${esc(c.bank || "—")}</td>
+              <td>${esc(procLabel(c.processor))}</td>
+              <td><code>${esc(c.afiliado || "—")}</code></td>
+              <td>${credStatusChip(c.status)}${refundPending(c) ? ' <span class="chip warning">Reembolso pendiente</span>' : ""}</td>
+              <td><button class="btn btn-ghost" data-cred-obs="${esc(c.id)}">Observaciones</button></td>
+              <td><button class="btn" data-cred-view="${esc(c.id)}">Ver credenciales</button></td>
             </tr>`).join("")}
         </tbody>
       </table></div>
-      ${rows.length === 0 ? '<div class="empty">No encontramos credenciales con esos filtros. Prueba ajustándolos.</div>' : ""}`;
+      ${list.length === 0 ? '<div class="empty">No encontramos credenciales con esos filtros. Prueba ajustándolos.</div>' : ""}`;
+    wireCredActions(el);
+  }
 
-    document.querySelectorAll("[data-resend]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        btn.disabled = true;
-        btn.textContent = "Enviando…";
-        await api(`/api/credentials/${encodeURIComponent(btn.dataset.resend)}/resend`, { method: "POST" });
-        await loadCredentials();
+  function renderCredKanban(list) {
+    const el = $("#credentials-body");
+    const byStatus = {};
+    CRED_STATUSES.forEach((s) => (byStatus[s.key] = []));
+    list.forEach((c) => (byStatus[c.status] || (byStatus[c.status] = [])).push(c));
+
+    el.innerHTML = `<div class="kanban">
+      ${CRED_STATUSES.map((s) => `
+        <div class="kanban-col">
+          <div class="kanban-col-head">
+            <span class="kc-title">${esc(s.col)}</span>
+            <span class="kc-count">${byStatus[s.key].length}</span>
+          </div>
+          <div class="kanban-cards">
+            ${byStatus[s.key].map((c) => credCard(c)).join("") || '<div class="kanban-empty">—</div>'}
+          </div>
+        </div>`).join("")}
+    </div>`;
+    wireCredActions(el);
+  }
+
+  function credCard(c) {
+    const idx = statusIndex(c.status);
+    const next = idx >= 0 && idx < CRED_STATUSES.length - 1 ? CRED_STATUSES[idx + 1] : null;
+    return `
+      <div class="kanban-card" data-cred-detail="${esc(c.id)}">
+        <div class="kc-merchant">${esc(merchantLabel(c.merchantId))}</div>
+        <div class="kc-meta">${esc(c.bank || "—")} · ${esc(procLabel(c.processor))}</div>
+        <div class="kc-meta kc-afiliado"><code>${esc(c.afiliado || "—")}</code></div>
+        ${refundPending(c) ? '<div class="kc-flag">Reembolso pendiente</div>' : ""}
+        ${next ? `<button class="btn btn-sm kc-advance" data-cred-advance="${esc(c.id)}" title="Mover a ${esc(next.col)}">Mover a ${esc(next.col)} →</button>` : '<span class="kc-done">✓ Completado</span>'}
+      </div>`;
+  }
+
+  function wireCredActions(root) {
+    root.querySelectorAll("[data-cred-detail]").forEach((elm) => {
+      elm.addEventListener("click", (ev) => {
+        if (ev.target.closest("[data-cred-advance]")) return;
+        openCredDetail(elm.dataset.credDetail);
       });
     });
+    root.querySelectorAll("[data-cred-view]").forEach((b) =>
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); openVerCredenciales(credById(b.dataset.credView)); }));
+    root.querySelectorAll("[data-cred-obs]").forEach((b) =>
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); openObservaciones(credById(b.dataset.credObs)); }));
+    root.querySelectorAll("[data-cred-advance]").forEach((b) =>
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); advanceCred(credById(b.dataset.credAdvance)); }));
   }
+
+  const credById = (id) => state.credentials.find((c) => c.id === id);
+
+  // ---- persistencia ----
+  async function putCred(c) {
+    const updated = await api(`/api/credentials/${encodeURIComponent(c.id)}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c),
+    });
+    const i = state.credentials.findIndex((x) => x.id === c.id);
+    if (i >= 0) state.credentials[i] = updated;
+    return updated;
+  }
+
+  function refreshCredViews(id) {
+    renderCredBody();
+    if (state.credDetailId && (!id || state.credDetailId === id)) {
+      const c = credById(state.credDetailId);
+      if (c) renderCredDetail(c);
+    }
+  }
+
+  async function advanceCred(c) {
+    const idx = statusIndex(c.status);
+    if (idx < 0 || idx >= CRED_STATUSES.length - 1) return;
+    const next = { ...c, status: CRED_STATUSES[idx + 1].key };
+    if (next.status === "Aprobado por BAC") next.aprobadoPorBac = true;
+    if (next.status === "Habilitado/Configurado" && !next.fechaMigracion) next.fechaMigracion = isoToday();
+    await putCred(next);
+    refreshCredViews(c.id);
+  }
+
+  async function setBrandTest(c, brandKey, result) {
+    const next = { ...c, ["prueba" + brandKey]: result };
+    await putCred(next);
+    refreshCredViews(c.id);
+  }
+
+  async function setRefunds(c, done) {
+    await putCred({ ...c, reembolsosPruebas: done });
+    refreshCredViews(c.id);
+  }
+
+  async function saveOpCode(c, brandKey, value) {
+    await putCred({ ...c, ["codigoOperacion" + brandKey]: value });
+  }
+
+  // ---- popups ----
+  function credField(label, value, copy) {
+    const v = value == null || value === "" ? "" : String(value);
+    return `<div class="cred-field">
+      <div class="cf-label">${esc(label)}</div>
+      <div class="cf-value"><span class="cf-text">${v ? esc(v) : "—"}</span>
+        ${v && copy ? `<button class="cf-copy" data-copy="${esc(v)}" title="Copiar">${COPY_ICON}</button>` : ""}
+      </div>
+    </div>`;
+  }
+
+  function openVerCredenciales(c) {
+    if (!c) return;
+    const body = `
+      <div class="ver-head">
+        <div><div class="ver-merchant">${esc(merchantLabel(c.merchantId))}</div>
+          <div class="ver-sub">${esc(c.bank || "—")} · ${esc(procLabel(c.processor))} · ${esc(c.afiliado || "")}</div></div>
+        ${credStatusChip(c.status)}
+      </div>
+      <div class="cred-fields">
+        ${credField("PowerTranz ID", c.powertranzId, true)}
+        ${credField("Contraseña", c.contrasena, true)}
+        ${credField("PW Admin Site", c.pwAdminSite, true)}
+        ${credField("Tarjetas", c.tarjetas, true)}
+        ${credField("Monedas", c.monedas, true)}
+        ${credField("3DS", c.threeDs ? "Sí" : "No", false)}
+        ${credField("Rebill", c.rebill ? "Sí" : "No", false)}
+        ${credField("Límite por Trx", c.limitePorTrx ? moneyC(c.limitePorTrx) : "", true)}
+        ${credField("Límite mensual", c.limiteMensual ? moneyC(c.limiteMensual) : "", true)}
+      </div>`;
+    const foot = `<button class="btn" data-modal-close>Cerrar</button>
+      <button class="btn btn-primary" id="ver-edit">Editar</button>`;
+    openModal("Credenciales", body, foot);
+    $("#ver-edit").addEventListener("click", () => { closeModal(); openCredForm(c); });
+  }
+
+  function openObservaciones(c) {
+    if (!c) return;
+    const obs = c.observaciones && c.observaciones.trim();
+    openModal(`Observaciones · ${esc(merchantLabel(c.merchantId))}`,
+      obs ? `<p class="obs-text">${esc(obs)}</p>`
+          : '<div class="empty">Sin observaciones para esta credencial todavía.</div>',
+      `<button class="btn" data-modal-close>Cerrar</button>
+       <button class="btn btn-primary" id="obs-edit">Editar</button>`);
+    $("#obs-edit").addEventListener("click", () => { closeModal(); openCredForm(c); });
+  }
+
+  // ---- formulario crear / editar ----
+  function opt(list, sel) { return list.map((v) => `<option value="${esc(v)}" ${v === sel ? "selected" : ""}>${esc(v)}</option>`).join(""); }
+
+  function openCredForm(c) {
+    const isNew = !c;
+    c = c || { processor: "POWERTRANZ", bank: "BAC", status: "Solicitado", tarjetas: "MC, VISA, AMEX", monedas: "USD", threeDs: true };
+    const merchOpts = state.merchants.map((m) => `<option value="${m.id}" ${m.id === c.merchantId ? "selected" : ""}>${esc(m.name)} (${esc(m.id)})</option>`).join("");
+    const body = `
+      <form id="cred-form" class="cred-form">
+        <div class="cred-form-grid">
+          <label class="cf-wide">Comercio<select id="cf-merchant" required><option value="">Selecciona…</option>${merchOpts}</select></label>
+          <label>Banco<select id="cf-bank">${opt(CRED_BANKS, c.bank)}</select></label>
+          <label>Procesador<select id="cf-proc">${opt(["POWERTRANZ", "EVERTEC"], c.processor)}</select></label>
+          <label>Afiliado<input id="cf-afiliado" value="${esc(c.afiliado || "")}"></label>
+          <label>Fecha de solicitud<input type="date" id="cf-solicitud" value="${esc(c.fechaSolicitud || "")}"></label>
+          <label>Estado<select id="cf-status">${CRED_STATUSES.map((s) => `<option value="${esc(s.key)}" ${s.key === c.status ? "selected" : ""}>${esc(s.key)}</option>`).join("")}</select></label>
+          <label class="cf-check"><input type="checkbox" id="cf-rebill" ${c.rebill ? "checked" : ""}> Rebill</label>
+          <label class="cf-check"><input type="checkbox" id="cf-3ds" ${c.threeDs ? "checked" : ""}> 3DS</label>
+
+          <div class="cf-section">Credenciales</div>
+          <label>PowerTranz ID<input id="cf-ptid" value="${esc(c.powertranzId || "")}"></label>
+          <label>Contraseña<input id="cf-pass" value="${esc(c.contrasena || "")}"></label>
+          <label>PW Admin Site<input id="cf-adminpw" value="${esc(c.pwAdminSite || "")}"></label>
+          <label>Tarjetas<input id="cf-tarjetas" value="${esc(c.tarjetas || "")}"></label>
+          <label>Monedas<input id="cf-monedas" value="${esc(c.monedas || "")}"></label>
+          <label>Límite por Trx (USD)<input type="number" step="any" id="cf-pertx" value="${c.limitePorTrx || ""}"></label>
+          <label>Límite mensual (USD)<input type="number" step="any" id="cf-monthly" value="${c.limiteMensual || ""}"></label>
+
+          <div class="cf-section">Pruebas por marca</div>
+          ${CRED_BRANDS.map((b) => `
+            <label>Prueba ${b.short}<select id="cf-prueba${b.key}">${opt(TEST_STATES, c["prueba" + b.key] || "Pendiente")}</select></label>
+            <label>Código operación ${b.short}<input id="cf-op${b.key}" value="${esc(c["codigoOperacion" + b.key] || "")}"></label>`).join("")}
+          <label class="cf-check"><input type="checkbox" id="cf-refunds" ${c.reembolsosPruebas ? "checked" : ""}> Reembolsos de pruebas emitidos</label>
+          <label class="cf-check"><input type="checkbox" id="cf-bac" ${c.aprobadoPorBac ? "checked" : ""}> Aprobado por BAC</label>
+          <label>Fecha de migración<input type="date" id="cf-migracion" value="${esc(c.fechaMigracion || "")}"></label>
+
+          <div class="cf-section">Notas</div>
+          <label class="cf-wide">Notas<textarea id="cf-notas" rows="2">${esc(c.notas || "")}</textarea></label>
+          <label class="cf-wide">Observaciones<textarea id="cf-obs" rows="2">${esc(c.observaciones || "")}</textarea></label>
+        </div>
+      </form>`;
+    const foot = `<button class="btn" data-modal-close>Cancelar</button>
+      <button class="btn btn-primary" id="cf-save">${isNew ? "Crear credencial" : "Guardar cambios"}</button>`;
+    openModal(isNew ? "Nueva credencial" : `Editar credencial · ${esc(c.id)}`, body, foot);
+    $("#cf-save").addEventListener("click", () => saveCredForm(isNew ? null : c));
+  }
+
+  async function saveCredForm(existing) {
+    const num = (id) => { const v = Number($(id).value); return Number.isFinite(v) ? v : 0; };
+    const body = {
+      ...(existing || {}),
+      merchantId: $("#cf-merchant").value,
+      bank: $("#cf-bank").value,
+      processor: $("#cf-proc").value,
+      afiliado: $("#cf-afiliado").value.trim(),
+      fechaSolicitud: $("#cf-solicitud").value || null,
+      status: $("#cf-status").value,
+      rebill: $("#cf-rebill").checked,
+      threeDs: $("#cf-3ds").checked,
+      powertranzId: $("#cf-ptid").value.trim(),
+      contrasena: $("#cf-pass").value.trim(),
+      pwAdminSite: $("#cf-adminpw").value.trim(),
+      tarjetas: $("#cf-tarjetas").value.trim(),
+      monedas: $("#cf-monedas").value.trim(),
+      limitePorTrx: num("#cf-pertx"),
+      limiteMensual: num("#cf-monthly"),
+      reembolsosPruebas: $("#cf-refunds").checked,
+      aprobadoPorBac: $("#cf-bac").checked,
+      fechaMigracion: $("#cf-migracion").value || null,
+      notas: $("#cf-notas").value.trim(),
+      observaciones: $("#cf-obs").value.trim(),
+    };
+    CRED_BRANDS.forEach((b) => {
+      body["prueba" + b.key] = $("#cf-prueba" + b.key).value;
+      body["codigoOperacion" + b.key] = $("#cf-op" + b.key).value.trim();
+    });
+    if (!body.merchantId) { $("#cf-merchant").focus(); return; }
+
+    if (existing) {
+      await putCred({ ...body, id: existing.id });
+    } else {
+      const created = await api("/api/credentials", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      state.credentials.push(created);
+    }
+    closeModal();
+    refreshCredViews(existing ? existing.id : null);
+  }
+
+  // ---- vista de detalle + stepper ----
+  function openCredDetail(id) {
+    const c = credById(id);
+    if (!c) return;
+    state.credDetailId = id;
+    renderCredDetail(c);
+    switchView("cred-detail");
+  }
+
+  function renderCredDetail(c) {
+    const el = $("#cred-detail");
+    const idx = statusIndex(c.status);
+    const next = idx >= 0 && idx < CRED_STATUSES.length - 1 ? CRED_STATUSES[idx + 1] : null;
+
+    const stepper = `<div class="stepper">
+      ${CRED_STATUSES.map((s, i) => `
+        <div class="step ${i < idx ? "done" : i === idx ? "current" : "future"}">
+          <span class="step-dot">${i < idx ? "✓" : i + 1}</span>
+          <span class="step-label">${esc(s.col)}</span>
+        </div>`).join('<span class="step-line"></span>')}
+    </div>`;
+
+    const brands = CRED_BRANDS.map((b) => {
+      const test = c["prueba" + b.key] || "Pendiente";
+      const opc = c["codigoOperacion" + b.key] || "";
+      const kind = test === "OK" ? "good" : test === "Falló" ? "serious" : "warning";
+      return `<div class="brand-test">
+        <div class="bt-head"><span class="bt-name">${esc(b.short)}</span> ${chip(test, kind)}</div>
+        <div class="bt-actions">
+          ${TEST_STATES.map((t) => `<button class="btn btn-sm ${t === test ? "btn-primary" : ""}" data-brand="${b.key}" data-result="${t}">${t}</button>`).join("")}
+        </div>
+        <label class="bt-op">Código de operación
+          <input data-opcode="${b.key}" value="${esc(opc)}" placeholder="OP-000000">
+        </label>
+      </div>`;
+    }).join("");
+
+    const refund = refundPending(c)
+      ? `<div class="refund-banner pending">
+          <div><b>Reembolsos de pruebas pendientes.</b> Al día siguiente de cada prueba aprobada debes emitir el reembolso para que el banco vea liquidar la transacción.</div>
+          <button class="btn btn-primary btn-sm" id="cred-refund-done">Marcar reembolsos como emitidos</button>
+        </div>`
+      : (anyBrandOk(c)
+          ? `<div class="refund-banner ok"><div>${CHECK_ICON} Reembolsos de pruebas emitidos.</div>
+              <button class="btn btn-sm" id="cred-refund-undo">Deshacer</button></div>`
+          : '<div class="refund-banner idle">Aún no hay pruebas aprobadas que requieran reembolso.</div>');
+
+    el.innerHTML = `
+      <div class="ad-top"><button class="btn" id="cred-back">← Volver</button></div>
+      <div class="card cred-detail-head">
+        <div class="cdh-main">
+          <div class="cdh-kicker">${credStatusChip(c.status)} Credencial ${esc(c.id)}</div>
+          <h1 class="ad-title">${esc(merchantLabel(c.merchantId))}</h1>
+          <p class="ad-msg">${esc(c.bank || "—")} · ${esc(procLabel(c.processor))} · ${esc(c.afiliado || "")}</p>
+        </div>
+        <div class="cdh-actions">
+          <button class="btn" id="cred-ver">Ver credenciales</button>
+          <button class="btn btn-primary" id="cred-edit">Editar</button>
+        </div>
+      </div>
+
+      <div class="dash-block" style="margin-top:22px">
+        <div class="block-label">Ciclo de vida</div>
+        <div class="card">
+          ${stepper}
+          ${next ? `<div class="stepper-action"><button class="btn btn-primary" id="cred-advance">Avanzar a: ${esc(next.col)} →</button></div>`
+            : '<div class="stepper-action"><span class="chip good">✓ Habilitada y configurada</span></div>'}
+        </div>
+      </div>
+
+      <div class="dash-block">
+        <div class="block-label">Pruebas por marca (MC · VISA · AMEX)</div>
+        <div class="card">
+          <p class="view-sub" style="margin-bottom:14px">Las pruebas se ejecutan en el core real de PagueloFacil. Aquí solo registras el resultado y el código de operación por marca.</p>
+          <div class="brand-tests">${brands}</div>
+          ${refund}
+        </div>
+      </div>
+
+      <div class="dash-block">
+        <div class="block-label">Datos del expediente</div>
+        <div class="card"><div class="ad-grid">
+          ${detailField("Comercio", esc(merchantLabel(c.merchantId)))}
+          ${detailField("Banco", esc(c.bank || "—"))}
+          ${detailField("Procesador", esc(procLabel(c.processor)))}
+          ${detailField("Afiliado", esc(c.afiliado || "—"))}
+          ${detailField("Fecha de solicitud", c.fechaSolicitud ? esc(fmtDate.format(parseDay(c.fechaSolicitud))) : "—")}
+          ${detailField("Rebill", c.rebill ? "Sí" : "No")}
+          ${detailField("3DS", c.threeDs ? "Sí" : "No")}
+          ${detailField("Tarjetas", esc(c.tarjetas || "—"))}
+          ${detailField("Monedas", esc(c.monedas || "—"))}
+          ${detailField("Límite por Trx", c.limitePorTrx ? moneyC(c.limitePorTrx) : "—")}
+          ${detailField("Límite mensual", c.limiteMensual ? moneyC(c.limiteMensual) : "—")}
+          ${detailField("Aprobado por BAC", c.aprobadoPorBac ? "Sí" : "No")}
+          ${detailField("Fecha de migración", c.fechaMigracion ? esc(fmtDate.format(parseDay(c.fechaMigracion))) : "—")}
+        </div>
+        ${c.notas ? `<div class="cred-notas"><div class="ad-k">Notas</div><p>${esc(c.notas)}</p></div>` : ""}
+        ${c.observaciones ? `<div class="cred-notas"><div class="ad-k">Observaciones</div><p>${esc(c.observaciones)}</p></div>` : ""}
+        </div>
+      </div>`;
+
+    $("#cred-back").addEventListener("click", () => { state.credDetailId = null; switchView("credentials"); });
+    $("#cred-ver").addEventListener("click", () => openVerCredenciales(c));
+    $("#cred-edit").addEventListener("click", () => openCredForm(c));
+    if (next) $("#cred-advance").addEventListener("click", () => advanceCred(c));
+    const rd = $("#cred-refund-done"); if (rd) rd.addEventListener("click", () => setRefunds(c, true));
+    const ru = $("#cred-refund-undo"); if (ru) ru.addEventListener("click", () => setRefunds(c, false));
+    el.querySelectorAll("[data-brand]").forEach((b) =>
+      b.addEventListener("click", () => setBrandTest(c, b.dataset.brand, b.dataset.result)));
+    el.querySelectorAll("[data-opcode]").forEach((inp) =>
+      inp.addEventListener("change", () => saveOpCode(c, inp.dataset.opcode, inp.value.trim())));
+  }
+
+  // ---------- modales ----------
+  function openModal(title, bodyHtml, footHtml) {
+    const root = $("#modal-root");
+    root.innerHTML = `
+      <div class="modal-overlay" data-modal-overlay>
+        <div class="modal" role="dialog" aria-modal="true">
+          <header class="modal-head"><h2>${title}</h2><button class="modal-close" data-modal-close aria-label="Cerrar">✕</button></header>
+          <div class="modal-body">${bodyHtml}</div>
+          ${footHtml ? `<footer class="modal-foot">${footHtml}</footer>` : ""}
+        </div>
+      </div>`;
+    root.hidden = false;
+    root.querySelectorAll("[data-modal-close]").forEach((b) => b.addEventListener("click", closeModal));
+    root.querySelector("[data-modal-overlay]").addEventListener("click", (ev) => {
+      if (ev.target === ev.currentTarget) closeModal();
+    });
+  }
+  function closeModal() { const r = $("#modal-root"); r.hidden = true; r.innerHTML = ""; }
 
   // ---------- puntos de pago ----------
 
