@@ -332,6 +332,14 @@
       openTopAlert();
     });
 
+    // minimizar / restaurar el encabezado
+    const setHeaderCollapsed = (collapsed) => {
+      document.querySelector(".app").classList.toggle("header-collapsed", collapsed);
+      $("#header-restore").hidden = !collapsed;
+    };
+    $("#header-toggle").addEventListener("click", () => setHeaderCollapsed(true));
+    $("#header-restore").addEventListener("click", () => setHeaderCollapsed(false));
+
     $("#f-range").addEventListener("change", () => {
       $("#f-custom").hidden = $("#f-range").value !== "custom";
       if ($("#f-range").value !== "custom") loadDashboard();
@@ -526,17 +534,17 @@
     }
   }
 
-  // ícono de "ubicación / comercio" para señalar dónde ocurre la alerta
-  const WHERE_ICON = '<svg viewBox="0 0 16 16"><path fill="currentColor" d="M8 1.5a4.5 4.5 0 0 0-4.5 4.5c0 3.3 4.5 8.5 4.5 8.5s4.5-5.2 4.5-8.5A4.5 4.5 0 0 0 8 1.5zm0 6.2A1.7 1.7 0 1 1 8 4.3a1.7 1.7 0 0 1 0 3.4z"/></svg>';
+  // Ícono universal de advertencia (rojo, minimalista) para las alertas.
+  const WARN_ICON_RED = '<svg class="alert-warn-ico" viewBox="0 0 24 24" width="17" height="17" aria-label="Advertencia"><path fill="currentColor" d="M12 2 22.5 20.5H1.5L12 2zm-1 6.5v6h2v-6h-2zm0 8v2h2v-2h-2z"/></svg>';
 
-  // Señala claramente el comercio/canal donde ocurre la alerta.
+  // Señala el comercio/canal donde ocurre la alerta (sin ícono de ubicación).
   function alertWhere(a) {
-    if (a.merchantName) return `<span class="alert-where">${WHERE_ICON}Comercio: <b>${esc(nameId(a.merchantName, a.merchantId))}</b></span>`;
+    if (a.merchantName) return `<span class="alert-where">Comercio: <b>${esc(nameId(a.merchantName, a.merchantId))}</b></span>`;
     if (a.processor) {
       const label = a.processor === "POWERTRANZ" ? "PowerTranz" : a.processor === "EVERTEC" ? "Evertec" : a.processor;
-      return `<span class="alert-where">${WHERE_ICON}Canal: <b>${esc(label)}</b></span>`;
+      return `<span class="alert-where">Canal: <b>${esc(label)}</b></span>`;
     }
-    return `<span class="alert-where">${WHERE_ICON}Alcance: <b>Todos los comercios</b></span>`;
+    return `<span class="alert-where">Alcance: <b>Todos los comercios</b></span>`;
   }
 
   // Banner ancho arriba de los KPIs: comunica que hay una alerta por revisar.
@@ -590,7 +598,7 @@
       <div class="alert-item ${SEVERITY_CLASS[a.severity]} ${a.acknowledged ? "acked" : ""}" data-alert-id="${esc(a.id)}">
         <div class="alert-head" data-toggle-alert="${esc(a.id)}" role="button" tabindex="0" aria-expanded="false">
           <div class="alert-body">
-            <div class="alert-title">${chip(SEVERITY_LABEL[a.severity], SEVERITY_CLASS[a.severity])} ${esc(a.ruleName)}
+            <div class="alert-title">${WARN_ICON_RED} ${esc(a.ruleName)}
               <svg class="alert-caret" viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M4 6l4 4 4-4z"/></svg></div>
             <div class="alert-msg">${esc(a.message)}</div>
             <div>${alertWhere(a)}</div>
