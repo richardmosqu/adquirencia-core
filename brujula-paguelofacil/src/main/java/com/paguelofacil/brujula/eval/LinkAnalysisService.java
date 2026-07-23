@@ -28,8 +28,8 @@ import java.util.stream.Collectors;
 @Service
 public class LinkAnalysisService {
 
-    // Modelo free rápido y actual. TODO: actualizar si Google cambia el nombre.
-    private static final String DEFAULT_MODEL = "gemini-2.0-flash";
+    // Modelo free rápido con cuota más holgada. TODO: actualizar si Google cambia el nombre.
+    private static final String DEFAULT_MODEL = "gemini-2.0-flash-lite";
     private static final int MAX_CHARS = 8000;
 
     private final KnowledgeBase kb;
