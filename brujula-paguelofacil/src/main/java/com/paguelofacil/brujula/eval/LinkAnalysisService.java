@@ -117,22 +117,34 @@ public class LinkAnalysisService {
                                 + pageText + "\n\"\"\"")))),
                 "generationConfig", Map.of("responseMimeType", "application/json", "temperature", 0.2));
 
-        HttpResponse<String> res;
+        String reqBody;
         try {
-            HttpRequest req = HttpRequest.newBuilder(URI.create(endpoint))
-                    .timeout(Duration.ofSeconds(45))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
-                    .build();
-            res = http.send(req, HttpResponse.BodyHandlers.ofString());
+            reqBody = mapper.writeValueAsString(body);
         } catch (Exception e) {
-            throw new AnalysisException("No pudimos conectar con el servicio de IA. Inténtalo de nuevo.");
+            throw new AnalysisException("No pudimos preparar la solicitud a la IA.");
         }
+
+        HttpResponse<String> res = postGemini(endpoint, reqBody);
+
+        // Límite del plan gratuito: reintenta una vez respetando el retryDelay que sugiere Gemini.
+        if (res.statusCode() == 429) {
+            long wait = retryDelaySeconds(res.body());
+            if (wait > 0 && wait <= 25) {
+                try { Thread.sleep(wait * 1000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                res = postGemini(endpoint, reqBody);
+            }
+        }
+
         if (res.statusCode() != 200) {
             String msg = "";
             try {
                 msg = mapper.readTree(res.body()).path("error").path("message").asText("");
             } catch (Exception ignored) { /* body no-JSON */ }
+            if (res.statusCode() == 429) {
+                throw new AnalysisException("Alcanzaste el límite de uso del plan gratuito de Gemini (429). "
+                        + "Espera un momento y reintenta; si persiste, prueba otro modelo con GEMINI_MODEL "
+                        + "(p. ej. gemini-2.0-flash-lite) o revisa tu cuota en Google AI Studio.");
+            }
             if (res.statusCode() == 400 || res.statusCode() == 403) {
                 throw new AnalysisException("La IA rechazó la solicitud (revisa GEMINI_API_KEY o el modelo GEMINI_MODEL). " + msg);
             }
@@ -151,6 +163,33 @@ public class LinkAnalysisService {
         } catch (Exception e) {
             throw new AnalysisException("No pudimos leer la respuesta de la IA. Inténtalo de nuevo.");
         }
+    }
+
+    private HttpResponse<String> postGemini(String endpoint, String reqBody) {
+        try {
+            HttpRequest req = HttpRequest.newBuilder(URI.create(endpoint))
+                    .timeout(Duration.ofSeconds(45))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(reqBody))
+                    .build();
+            return http.send(req, HttpResponse.BodyHandlers.ofString());
+        } catch (Exception e) {
+            throw new AnalysisException("No pudimos conectar con el servicio de IA. Inténtalo de nuevo.");
+        }
+    }
+
+    /** Segundos sugeridos por Gemini para reintentar (campo retryDelay) o un default. */
+    private long retryDelaySeconds(String body) {
+        try {
+            for (JsonNode d : mapper.readTree(body).path("error").path("details")) {
+                String rd = d.path("retryDelay").asText("");
+                if (!rd.isBlank()) {
+                    String num = rd.replaceAll("[^0-9.]", "");
+                    if (!num.isBlank()) return (long) Math.ceil(Double.parseDouble(num));
+                }
+            }
+        } catch (Exception ignored) { /* sin detalles */ }
+        return 6;
     }
 
     private JsonNode parse(String jsonText) {
