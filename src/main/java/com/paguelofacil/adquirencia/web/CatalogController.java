@@ -32,11 +32,6 @@ public class CatalogController {
         return store.merchants();
     }
 
-    @GetMapping("/projects")
-    public List<Project> projects() {
-        return store.projects();
-    }
-
     @GetMapping("/documents")
     public List<DocumentItem> documents() {
         return store.documents();

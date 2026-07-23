@@ -133,7 +133,7 @@ public class DataStore {
     private final List<Merchant> merchants = new ArrayList<>();
     private final List<Transaction> transactions = new ArrayList<>();
     private final List<AlertRule> alertRules = new CopyOnWriteArrayList<>();
-    private final List<Project> projects = new ArrayList<>();
+    private final List<Project> projects = new CopyOnWriteArrayList<>();
     private final List<Credential> credentials = new CopyOnWriteArrayList<>();
     private final List<PaymentPoint> paymentPoints = new CopyOnWriteArrayList<>();
     private final List<DocumentItem> documents = new ArrayList<>();
@@ -376,25 +376,76 @@ public class DataStore {
     }
 
     private void seedProjects() {
-        LocalDate today = LocalDate.now();
-        projects.add(new Project("P-001", "Migración de comercios a 3DS 2.2",
+        Project p1 = proj("P-001", "Migración de comercios a 3DS 2.2",
                 "Actualizar la autenticación de los comercios de mayor volumen a 3DS 2.2 en PowerTranz.",
-                "En curso", "Richard Mosqueda", today.minusDays(3)));
-        projects.add(new Project("P-002", "Conciliación automática Evertec",
+                "En progreso", "Alta", List.of("Richard Mosqueda"), -20, 10);
+        p1.setTasks(new ArrayList<>(List.of(
+                new ProjectTask("T-1", "Levantar lista de comercios de mayor volumen", true),
+                new ProjectTask("T-2", "Coordinar ventana de cambio con PowerTranz", true),
+                new ProjectTask("T-3", "Migrar primer lote de comercios", false),
+                new ProjectTask("T-4", "Validar aprobación post-migración", false))));
+        p1.setSeguimiento(new ArrayList<>(List.of(
+                new ProjectLog(LocalDate.now().minusDays(12), "Richard Mosqueda", "Arranca el proyecto; se prioriza el top 20 de comercios."),
+                new ProjectLog(LocalDate.now().minusDays(4), "Richard Mosqueda", "Ventana confirmada con PowerTranz para la próxima semana."))));
+        projects.add(p1);
+
+        Project p2 = proj("P-002", "Conciliación automática Evertec",
                 "Automatizar la conciliación diaria de liquidaciones del canal Evertec contra la base interna.",
-                "En curso", "Ahiezer Dominguez", today.minusDays(6)));
-        projects.add(new Project("P-003", "Catálogo unificado de códigos DR",
+                "En progreso", "Media", List.of("Ahiezer Dominguez"), -30, 20);
+        p2.setProgreso(45);
+        p2.setSeguimiento(new ArrayList<>(List.of(
+                new ProjectLog(LocalDate.now().minusDays(6), "Ahiezer Dominguez", "Primer prototipo del job de conciliación corriendo en pruebas."))));
+        projects.add(p2);
+
+        Project p3 = proj("P-003", "Catálogo unificado de códigos DR",
                 "Mapear los códigos de rechazo de todos los procesadores a un catálogo único con acciones sugeridas.",
-                "En curso", "Richard Mosqueda", today.minusDays(1)));
-        projects.add(new Project("P-004", "Onboarding express de credenciales",
+                "Completado", "Media", List.of("Richard Mosqueda"), -60, -5);
+        p3.setTasks(new ArrayList<>(List.of(
+                new ProjectTask("T-1", "Recopilar códigos por procesador", true),
+                new ProjectTask("T-2", "Definir plan de acción por código", true),
+                new ProjectTask("T-3", "Publicar catálogo en Documentos", true))));
+        p3.setProgreso(100);
+        projects.add(p3);
+
+        Project p4 = proj("P-004", "Onboarding express de credenciales",
                 "Reducir el tiempo de alta de DBAs y credenciales de 5 días a 48 horas.",
-                "Por iniciar", "Equipo Adquirencia", today.minusDays(12)));
-        projects.add(new Project("P-005", "Certificación PCI DSS 4.0",
+                "Planeado", "Alta", List.of("Equipo Adquirencia"), 5, 40);
+        projects.add(p4);
+
+        Project p5 = proj("P-005", "Certificación PCI DSS 4.0",
                 "Acompañamiento de la recertificación anual y evidencias del área.",
-                "En pausa", "Ahiezer Dominguez", today.minusDays(20)));
-        projects.add(new Project("P-006", "Dashboard de adquirencia (este Core)",
+                "En pausa", "Alta", List.of("Ahiezer Dominguez"), -40, 15);
+        p5.setProgreso(30);
+        p5.setSeguimiento(new ArrayList<>(List.of(
+                new ProjectLog(LocalDate.now().minusDays(20), "Ahiezer Dominguez", "En pausa a la espera del auditor externo."))));
+        projects.add(p5);
+
+        Project p6 = proj("P-006", "Dashboard de adquirencia (este Core)",
                 "Panel central del área: procesamiento, alertas, credenciales, puntos de pago y documentos.",
-                "En curso", "Richard Mosqueda", today));
+                "En progreso", "Media", List.of("Richard Mosqueda"), -25, 2);
+        p6.setProgreso(80);
+        projects.add(p6);
+
+        Project p7 = proj("P-007", "Integración con billetera externa",
+                "Explorar la integración con una billetera digital de terceros para checkout.",
+                "Cancelado", "Baja", List.of("Equipo Adquirencia"), -50, -10);
+        p7.setSeguimiento(new ArrayList<>(List.of(
+                new ProjectLog(LocalDate.now().minusDays(15), "Richard Mosqueda", "Cancelado: el proveedor no cumple los requisitos de seguridad."))));
+        projects.add(p7);
+    }
+
+    private Project proj(String id, String name, String desc, String status, String prioridad,
+                         List<String> responsables, int inicioOff, int entregaOff) {
+        Project p = new Project();
+        p.setId(id);
+        p.setName(name);
+        p.setDescription(desc);
+        p.setStatus(status);
+        p.setPrioridad(prioridad);
+        p.setResponsables(new ArrayList<>(responsables));
+        p.setFechaInicio(LocalDate.now().plusDays(inicioOff));
+        p.setFechaEntrega(LocalDate.now().plusDays(entregaOff));
+        return p;
     }
 
     /** Estados del ciclo de vida de una credencial (en orden del pipeline). */

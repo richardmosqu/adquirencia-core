@@ -176,9 +176,24 @@
       <section id="view-projects" class="view" hidden>
         <div class="panel">
           <h1 class="panel-title">Proyectos</h1>
-          <p class="view-sub">Estas son las iniciativas del área de adquirencia: en qué vamos, su estado y quién las lidera.</p>
+          <p class="view-sub">Crea, sigue y gestiona las iniciativas del área: responsables, fechas, prioridad, progreso, tareas y bitácora.</p>
+          <div class="cred-toolbar">
+            <div class="view-switch" role="tablist">
+              <button type="button" class="seg active" id="proj-view-table">Tabla</button>
+              <button type="button" class="seg" id="proj-view-kanban">Kanban</button>
+            </div>
+            <select id="proj-status-filter"><option value="">Todos los estados</option></select>
+            <select id="proj-resp-filter"><option value="">Todos los responsables</option></select>
+            <select id="proj-prio-filter"><option value="">Todas las prioridades</option></select>
+            <button type="button" class="btn btn-primary" id="proj-new">Agregar proyecto</button>
+          </div>
+          <div id="projects-body"></div>
         </div>
-        <div class="project-grid" id="project-grid"></div>
+      </section>
+
+      <!-- DETALLE DE PROYECTO -->
+      <section id="view-project-detail" class="view" hidden>
+        <div id="project-detail"></div>
       </section>
 
       <!-- CREDENCIALES -->
