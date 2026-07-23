@@ -40,12 +40,15 @@
     $("#view-" + v).hidden = false;
     window.scrollTo(0, 0);
     if (v === "kb") renderKb();
+    if (v === "historial") loadHistory();
   }
 
-  // ---------- evaluar ----------
+  // ---------- evaluar (manual) ----------
   async function onEvaluate(ev) {
     ev.preventDefault();
+    const nombre = $("#f-nombre").value.trim();
     const body = {
+      nombreComercio: nombre,
       rubro: $("#f-rubro").value.trim(),
       tamano: $("#f-tamano").value,
       volumenEstimado: Number($("#f-volumen").value) || 0,
@@ -55,19 +58,22 @@
     const a = await api("/api/evaluate", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
-    renderResults(a);
+    renderManualResults(a, $("#results"), nombre);
+    $("#results").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function eligMeta(estado) {
-    if (estado === "Elegible") return { cls: "elig-ok", icon: CHECK };
-    if (estado === "No elegible") return { cls: "elig-no", icon: CROSS };
-    return { cls: "elig-cond", icon: WARN };
+    const s = (estado || "").toLowerCase();
+    if (s.startsWith("no ")) return { cls: "elig-no", icon: CROSS };       // No elegible / No permitido
+    if (s === "elegible" || s === "permitido") return { cls: "elig-ok", icon: CHECK };
+    return { cls: "elig-cond", icon: WARN };                                // condiciones / condicionado
   }
 
-  function renderResults(a) {
+  function renderManualResults(a, container, nombre) {
     const e = a.eligibility, m = eligMeta(e.estado);
     const portafolio = a.portafolio || [], est = a.estrategia;
-    $("#results").innerHTML = `
+    container.innerHTML = `
+      ${nombre ? `<div class="result-lead-head"><h2>${esc(nombre)}</h2><span class="origin-badge manual">Lead manual</span></div>` : ""}
       <div class="card result-block">
         <div class="block-label">1 · Validación de elegibilidad</div>
         <div class="elig-head"><span class="elig-badge ${m.cls}">${m.icon} ${esc(e.estado)}</span></div>
@@ -91,7 +97,143 @@
             <div class="obj-a"><b>Respuesta:</b> ${esc(o.respuesta)}</div></div>`).join("")
           : '<div class="reco-empty">Sin objeciones sugeridas.</div>'}
       </div>`;
-    $("#results").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  // ---------- analizar por link (Gemini) ----------
+  async function onAnalyzeLink(ev) {
+    ev.preventDefault();
+    const url = $("#f-url").value.trim();
+    if (!url) { $("#f-url").focus(); return; }
+    const btn = $("#link-submit"), prev = btn.textContent;
+    btn.disabled = true; btn.textContent = "Analizando…";
+    $("#link-results").innerHTML = `<div class="analyzing card"><span class="spinner"></span>
+      <p>Leyendo el sitio y consultando la IA… puede tardar unos segundos.</p></div>`;
+    try {
+      const r = await api("/api/analyze-link", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }),
+      });
+      if (!r.ok) {
+        $("#link-results").innerHTML = `<div class="card error-card">${esc(r.error || "No pudimos analizar el sitio.")}</div>`;
+      } else {
+        renderLinkResults(r.analysis, $("#link-results"));
+      }
+    } catch (e) {
+      $("#link-results").innerHTML = '<div class="card error-card">No pudimos completar el análisis. Inténtalo de nuevo.</div>';
+    } finally {
+      btn.disabled = false; btn.textContent = prev;
+    }
+  }
+
+  const pgField = (k, v) => `<div class="pg-field"><span class="pg-k">${esc(k)}</span><span class="pg-v">${esc(v || "—")}</span></div>`;
+
+  function renderLinkResults(a, container) {
+    a = a || {};
+    const el = a.elegibilidad || {}, m = eligMeta(el.estado);
+    const port = a.portafolioPF || [], est = a.estrategiaAfiliacion || {};
+    const prod = a.productosServicios || [];
+    container.innerHTML = `
+      <div class="result-lead-head"><h2>${esc(a.nombreComercio || "Comercio")}</h2><span class="origin-badge link">Analizado por link</span></div>
+      <div class="card result-block">
+        <div class="block-label">Perfil del comercio</div>
+        <div class="profile-grid">
+          ${pgField("Rubro", a.rubro)}
+          ${pgField("Canal", a.canal)}
+          ${pgField("Tamaño estimado", a.tamanoEstimado)}
+          ${pgField("País / idioma", a.paisIdioma)}
+        </div>
+        ${a.descripcion ? `<p class="profile-desc">${esc(a.descripcion)}</p>` : ""}
+        ${prod.length ? `<div class="tags-row">${prod.map((p) => `<span class="tag">${esc(p)}</span>`).join("")}</div>` : ""}
+      </div>
+      <div class="card result-block">
+        <div class="block-label">1 · Validación de elegibilidad</div>
+        <div class="elig-head"><span class="elig-badge ${m.cls}">${m.icon} ${esc(el.estado || "—")}</span></div>
+        <ul class="elig-list">${(el.razones || []).map((r) => `<li>${esc(r)}</li>`).join("")}</ul>
+        ${(el.riesgos && el.riesgos.length) ? `<div class="elig-risk"><h4>Riesgos / condiciones</h4>
+          <ul class="elig-list">${el.riesgos.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>` : ""}
+      </div>
+      <div class="card result-block">
+        <div class="block-label">2 · Portafolio priorizado de servicios PF</div>
+        ${port.length ? port.map((s, i) => `
+          <div class="reco-item ${i === 0 ? "top" : ""}">
+            <span class="reco-rank">${i + 1}</span>
+            <div><div class="reco-name">${esc(s.servicio || "")}</div><div class="reco-why">${esc(s.porque || "")}</div></div>
+          </div>`).join("") : '<div class="reco-empty">Sin servicios sugeridos.</div>'}
+      </div>
+      <div class="card result-block">
+        <div class="block-label">3 · Estrategia de afiliación</div>
+        ${est.angulo ? `<div class="angle">${esc(est.angulo)}</div>` : ""}
+        ${(est.objeciones && est.objeciones.length) ? est.objeciones.map((o) => `
+          <div class="obj-item"><div class="obj-q">${esc(o.objecion)}</div>
+            <div class="obj-a"><b>Respuesta:</b> ${esc(o.respuesta)}</div></div>`).join("") : ""}
+        ${(est.siguientesPasos && est.siguientesPasos.length) ? `<div class="next-steps"><h4>Siguientes pasos</h4>
+          <ol>${est.siguientesPasos.map((p) => `<li>${esc(p)}</li>`).join("")}</ol></div>` : ""}
+      </div>`;
+  }
+
+  // ---------- historial ----------
+  let historyCache = [];
+
+  async function loadHistory() {
+    historyCache = await api("/api/history");
+    populateHistFilters();
+    renderHistList();
+  }
+
+  function populateHistFilters() {
+    const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
+    fillSelect($("#h-elig"), uniq(historyCache.map((h) => h.elegibilidad)), "Toda elegibilidad");
+    fillSelect($("#h-canal"), uniq(historyCache.map((h) => h.canal)), "Todos los canales");
+    fillSelect($("#h-rubro"), uniq(historyCache.map((h) => h.rubro)), "Todos los rubros");
+  }
+
+  function fillSelect(sel, values, allLabel) {
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">${esc(allLabel)}</option>` + values.map((v) => `<option>${esc(v)}</option>`).join("");
+    if (cur && values.includes(cur)) sel.value = cur;
+  }
+
+  function filteredHistory() {
+    const q = $("#h-search").value.trim().toLowerCase();
+    const el = $("#h-elig").value, ca = $("#h-canal").value, ru = $("#h-rubro").value, or = $("#h-origen").value;
+    return historyCache
+      .filter((h) => !q || (h.nombreComercio || "").toLowerCase().includes(q))
+      .filter((h) => !el || h.elegibilidad === el)
+      .filter((h) => !ca || h.canal === ca)
+      .filter((h) => !ru || h.rubro === ru)
+      .filter((h) => !or || h.origen === or);
+  }
+
+  function fmtDate(iso) {
+    try {
+      return new Date(iso).toLocaleString("es-PA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    } catch (e) { return iso || ""; }
+  }
+
+  function renderHistList() {
+    const el = $("#hist-list");
+    if (!historyCache.length) {
+      el.innerHTML = '<div class="empty-note">Aún no hay leads evaluados. Evalúa uno (manual o por link) y aparecerá aquí.</div>';
+      return;
+    }
+    const list = filteredHistory();
+    if (!list.length) { el.innerHTML = '<div class="empty-note">Ningún lead con esos filtros.</div>'; return; }
+    el.innerHTML = list.map((h) => `
+      <button class="hist-item" data-id="${esc(h.id)}">
+        <div class="hi-top"><span class="hi-name">${esc(h.nombreComercio)}</span>
+          <span class="origin-badge ${h.origen === "Link" ? "link" : "manual"}">${esc(h.origen)}</span></div>
+        <div class="hi-meta">${esc(h.rubro)} · ${esc(h.canal)}</div>
+        <div class="hi-foot"><span class="elig-badge sm ${eligMeta(h.elegibilidad).cls}">${esc(h.elegibilidad)}</span>
+          <span class="hi-date">${esc(fmtDate(h.fecha))}</span></div>
+      </button>`).join("");
+    el.querySelectorAll(".hist-item").forEach((b) => b.addEventListener("click", () => openHistory(b.dataset.id)));
+  }
+
+  function openHistory(id) {
+    const h = historyCache.find((x) => x.id === id);
+    if (!h) return;
+    document.querySelectorAll(".hist-item").forEach((b) => b.classList.toggle("active", b.dataset.id === id));
+    if (h.origen === "Link") renderLinkResults(h.resultado, $("#hist-detail"));
+    else renderManualResults(h.resultado, $("#hist-detail"), h.nombreComercio);
   }
 
   // ---------- base de conocimiento ----------
@@ -235,12 +377,17 @@
       t.focus();
     }));
     $("#lead-form").addEventListener("submit", onEvaluate);
+    $("#link-form").addEventListener("submit", onAnalyzeLink);
+    ["#h-search", "#h-elig", "#h-canal", "#h-rubro", "#h-origen"].forEach((sel) =>
+      $(sel).addEventListener("input", renderHistList));
 
-    // Deep-link opcional: #kb abre la administración; parámetros prellenan y
-    // evalúan el lead (útil para compartir o demostrar).
-    if (location.hash === "#kb") switchView("kb");
+    // Deep-link opcional: #kb / #link / #historial abren esa vista; parámetros
+    // prellenan y evalúan el lead manual (útil para compartir o demostrar).
+    const hashView = (location.hash || "").replace("#", "");
+    if (["kb", "link", "historial"].includes(hashView)) switchView(hashView);
     const q = new URLSearchParams(location.search);
     if ([...q.keys()].length) {
+      if (q.get("nombre")) $("#f-nombre").value = q.get("nombre");
       if (q.get("rubro")) $("#f-rubro").value = q.get("rubro");
       if (q.get("tamano")) $("#f-tamano").value = q.get("tamano");
       if (q.get("volumen")) $("#f-volumen").value = q.get("volumen");
