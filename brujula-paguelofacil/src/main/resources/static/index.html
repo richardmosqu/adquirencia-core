@@ -28,6 +28,8 @@
       </a>
       <nav class="topnav">
         <button class="topnav-item active" data-view="evaluar">Evaluar lead</button>
+        <button class="topnav-item" data-view="link">Analizar por link</button>
+        <button class="topnav-item" data-view="historial">Historial</button>
         <button class="topnav-item" data-view="kb">Base de conocimiento</button>
       </nav>
     </header>
@@ -44,6 +46,9 @@
           <article class="card form-card">
             <h2 class="card-title">Datos del lead</h2>
             <form id="lead-form">
+              <label>Nombre del comercio
+                <input type="text" id="f-nombre" placeholder="Ej: Boutique Marbella">
+              </label>
               <label>Rubro / giro de negocio
                 <input type="text" id="f-rubro" list="rubro-list" required placeholder="Ej: Restaurantes y comida">
                 <datalist id="rubro-list"></datalist>
@@ -82,6 +87,62 @@
                 <path d="M12 5.5 14 10l4.5 2-4.5 2-2 4.5-2-4.5L5.5 12 10 10z" fill="currentColor"/>
               </svg>
               <p>Completa los datos del lead y presiona <b>Evaluar lead</b> para ver el análisis.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== ANALIZAR POR LINK ===================== -->
+      <section id="view-link" class="view" hidden>
+        <div class="hero">
+          <h1>Analizar por link</h1>
+          <p>Pega la URL del sitio del comercio y Brújula PF lo analiza con IA (Gemini): perfil del negocio, elegibilidad, portafolio PF y estrategia de afiliación.</p>
+        </div>
+        <div class="lead-layout">
+          <article class="card form-card">
+            <h2 class="card-title">Sitio del comercio</h2>
+            <form id="link-form">
+              <label>URL del sitio web
+                <input type="text" id="f-url" placeholder="Ej: https://www.comercio.com" autocomplete="off">
+              </label>
+              <button type="submit" class="btn btn-primary btn-block" id="link-submit">Analizar sitio</button>
+              <p class="link-hint">La IA lee el contenido público del sitio y lo cruza con la base de conocimiento de PagueloFacil.</p>
+            </form>
+          </article>
+          <div class="results" id="link-results">
+            <div class="results-empty">
+              <svg class="compass big" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M12 5.5 14 10l4.5 2-4.5 2-2 4.5-2-4.5L5.5 12 10 10z" fill="currentColor"/>
+              </svg>
+              <p>Pega una URL y presiona <b>Analizar sitio</b> para ver el análisis con IA.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== HISTORIAL ===================== -->
+      <section id="view-historial" class="view" hidden>
+        <div class="hero">
+          <h1>Historial de leads</h1>
+          <p>Cada lead evaluado (manual o por link) queda aquí. Haz clic para reabrir su análisis completo. Se reinicia al reiniciar la app.</p>
+        </div>
+        <div class="hist-filters">
+          <input type="search" id="h-search" placeholder="Buscar por nombre del comercio…">
+          <select id="h-elig"><option value="">Toda elegibilidad</option></select>
+          <select id="h-canal"><option value="">Todos los canales</option></select>
+          <select id="h-rubro"><option value="">Todos los rubros</option></select>
+          <select id="h-origen">
+            <option value="">Todos los orígenes</option>
+            <option value="Manual">Manual</option>
+            <option value="Link">Link</option>
+          </select>
+        </div>
+        <div class="hist-layout">
+          <div class="hist-list" id="hist-list"></div>
+          <div class="hist-detail" id="hist-detail">
+            <div class="results-empty">
+              <p>Selecciona un lead del historial para ver su análisis.</p>
             </div>
           </div>
         </div>
