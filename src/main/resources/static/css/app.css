@@ -171,6 +171,9 @@ body {
 }
 .icon-btn:hover { background: var(--plane); }
 
+.logout-btn { gap: 6px; text-decoration: none; color: var(--ink-2); font-size: 13px; font-weight: 500; }
+.logout-btn:hover { color: var(--status-critical-txt); background: var(--red-100); }
+
 .avatar {
   background: var(--pf-green);
   color: #fff;
@@ -1343,7 +1346,7 @@ table.data a, .link, table.data .cell-link {
   .content { padding: 20px 16px calc(var(--dock-h) + 30px); }
   .topbar { padding: 0 12px; }
   .topbar-left, .topbar-right { gap: 10px; }
-  .updated, .logo-tag, .topbar-user-name { display: none; }
+  .updated, .logo-tag, .topbar-user-name, .logout-label { display: none; }
   .kpis, .kpis.kpis-row { grid-template-columns: 1fr; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .alert-banner { flex-wrap: wrap; }
