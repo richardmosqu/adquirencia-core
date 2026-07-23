@@ -552,13 +552,9 @@
     const el = $("#alert-banner");
     const active = alerts.filter((a) => !a.acknowledged);
     if (!active.length) {
-      el.className = "alert-banner sev-good";
-      el.innerHTML = `
-        <div class="ab-ico">${CHIP_ICONS.good}</div>
-        <div class="ab-body">
-          <div class="ab-kicker">Todo en orden</div>
-          <div class="ab-msg">No hay alertas activas ahora mismo. Seguimos monitoreando tu procesamiento por ti.</div>
-        </div>`;
+      // sin alertas: el banner desaparece por completo
+      el.className = "";
+      el.innerHTML = "";
       return;
     }
     // el backend ya ordena por severidad desc: la primera es la más importante
