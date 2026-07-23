@@ -59,6 +59,9 @@
     credView: "table",
     credDetailId: null,
     paymentPoints: [],
+    projects: [],
+    projView: "table",
+    projDetailId: null,
     view: "dashboard",
   };
 
@@ -367,6 +370,13 @@
     $("#cred-new").addEventListener("click", () => openCredForm(null));
     $("#point-new").addEventListener("click", () => openPointForm(null));
 
+    $("#proj-view-table").addEventListener("click", () => setProjView("table"));
+    $("#proj-view-kanban").addEventListener("click", () => setProjView("kanban"));
+    $("#proj-status-filter").addEventListener("change", renderProjBody);
+    $("#proj-resp-filter").addEventListener("change", renderProjBody);
+    $("#proj-prio-filter").addEventListener("change", renderProjBody);
+    $("#proj-new").addEventListener("click", () => openProjectForm(null));
+
     // copiar al portapapeles cualquier campo con [data-copy]
     document.addEventListener("click", (ev) => {
       const btn = ev.target.closest("[data-copy]");
@@ -413,12 +423,19 @@
     if (h.startsWith("alert=")) { loadAlertDetail(decodeURIComponent(h.slice(6))); return; }
     if (h.startsWith("cred=")) { openCredFromHash(decodeURIComponent(h.slice(5))); return; }
     if (h === "credentials-kanban") { switchView("credentials"); setTimeout(() => setCredView("kanban"), 500); return; }
+    if (h.startsWith("proj=")) { openProjFromHash(decodeURIComponent(h.slice(5))); return; }
+    if (h === "projects-kanban") { switchView("projects"); setTimeout(() => setProjView("kanban"), 500); return; }
     if (KNOWN_VIEWS.includes(h)) switchView(h);
   }
 
   async function openCredFromHash(id) {
     if (!state.credentials.length) await loadCredentials();
     openCredDetail(id);
+  }
+
+  async function openProjFromHash(id) {
+    if (!state.projects.length) await loadProjects();
+    openProjectDetail(id);
   }
 
   // Abre el dashboard y despliega el detalle inline de la alerta más importante.
@@ -1049,19 +1066,369 @@
 
   // ---------- proyectos ----------
 
+  const PROJ_STATUSES = [
+    { key: "Planeado", kind: "neutral" },
+    { key: "En progreso", kind: "warning" },
+    { key: "En pausa", kind: "warning" },
+    { key: "Completado", kind: "good" },
+    { key: "Cancelado", kind: "serious" },
+  ];
+  const PROJ_PRIORITIES = ["Baja", "Media", "Alta"];
+
+  const projStatusKind = (s) => (PROJ_STATUSES.find((x) => x.key === s) || { kind: "neutral" }).kind;
+  const projStatusChip = (s) => chip(s, projStatusKind(s));
+  const prioClass = (p) => (p === "Alta" ? "alta" : p === "Media" ? "media" : "baja");
+  const prioPill = (p) => (p ? `<span class="prio prio-${prioClass(p)}">${esc(p)}</span>` : "");
+  const respLabel = (p) => (p.responsables && p.responsables.length ? p.responsables.join(", ") : "—");
+
+  // Progreso efectivo: si hay tareas se deriva de completadas/total; si no, el manual.
+  function projProgress(p) {
+    const t = p.tasks || [];
+    if (t.length) return Math.round((t.filter((x) => x.done).length / t.length) * 100);
+    return p.progreso || 0;
+  }
+  const progressBar = (pct) => `<div class="proj-progress"><span style="width:${pct}%"></span></div>`;
+
+  // Señalización de la fecha de entrega (vencido / pronto).
+  function dueMeta(p) {
+    if (!p.fechaEntrega) return { cls: "", label: "—" };
+    const label = fmtDate.format(parseDay(p.fechaEntrega));
+    if (p.status === "Completado" || p.status === "Cancelado") return { cls: "", label };
+    const days = Math.ceil((parseDay(p.fechaEntrega) - new Date()) / 86400000);
+    if (days < 0) return { cls: "due-overdue", label: `${label} · vencido` };
+    if (days <= 3) return { cls: "due-soon", label: `${label} · pronto` };
+    return { cls: "", label };
+  }
+
+  const projById = (id) => state.projects.find((p) => p.id === id);
+
   async function loadProjects() {
-    const projects = await api("/api/projects");
-    $("#project-grid").innerHTML = projects.map((p) => `
-      <div class="project-card">
-        <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-          <h3>${esc(p.name)}</h3>${chip(p.status)}
+    state.projects = await api("/api/projects");
+    populateProjFilters();
+    renderProjBody();
+  }
+
+  function populateProjFilters() {
+    const st = $("#proj-status-filter"), rf = $("#proj-resp-filter"), pf = $("#proj-prio-filter");
+    if (st.options.length <= 1) {
+      PROJ_STATUSES.forEach((s) => st.append(new Option(s.key, s.key)));
+      PROJ_PRIORITIES.forEach((p) => pf.append(new Option(p, p)));
+    }
+    const current = rf.value;
+    const resp = [...new Set(state.projects.flatMap((p) => p.responsables || []))].sort();
+    rf.innerHTML = '<option value="">Todos los responsables</option>';
+    resp.forEach((r) => rf.append(new Option(r, r)));
+    if (current) rf.value = current;
+  }
+
+  function setProjView(v) {
+    state.projView = v;
+    $("#proj-view-table").classList.toggle("active", v === "table");
+    $("#proj-view-kanban").classList.toggle("active", v === "kanban");
+    renderProjBody();
+  }
+
+  function filteredProjects() {
+    const st = $("#proj-status-filter").value, rf = $("#proj-resp-filter").value, pf = $("#proj-prio-filter").value;
+    return state.projects
+      .filter((p) => !st || p.status === st)
+      .filter((p) => !rf || (p.responsables || []).includes(rf))
+      .filter((p) => !pf || p.prioridad === pf);
+  }
+
+  function renderProjBody() {
+    if (!state.projects.length) {
+      $("#projects-body").innerHTML = `
+        <div class="cred-empty">
+          <div class="empty">Aún no hay proyectos. Crea el primero para empezar a darle seguimiento.</div>
+          <button class="btn btn-primary" id="proj-empty-new">Agregar proyecto</button>
+        </div>`;
+      $("#proj-empty-new").addEventListener("click", () => openProjectForm(null));
+      return;
+    }
+    const list = filteredProjects();
+    if (state.projView === "kanban") renderProjKanban(list);
+    else renderProjTable(list);
+  }
+
+  function renderProjTable(list) {
+    const el = $("#projects-body");
+    el.innerHTML = `
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Proyecto</th><th>Responsables</th><th>Estado</th><th>Prioridad</th><th>Progreso</th><th>Inicio</th><th>Entrega</th><th></th></tr></thead>
+        <tbody>
+          ${list.map((p) => { const due = dueMeta(p); const pr = projProgress(p); return `
+            <tr>
+              <td><a class="cell-link" data-proj-detail="${esc(p.id)}">${esc(p.name)}</a>${p.merchantId ? `<div class="proj-merchant">${esc(merchantLabel(p.merchantId))}</div>` : ""}</td>
+              <td>${esc(respLabel(p))}</td>
+              <td>${projStatusChip(p.status)}</td>
+              <td>${prioPill(p.prioridad)}</td>
+              <td><div class="proj-progress-cell">${progressBar(pr)}<span class="pp-num">${pr}%</span></div></td>
+              <td>${p.fechaInicio ? esc(fmtDate.format(parseDay(p.fechaInicio))) : "—"}</td>
+              <td class="${due.cls}">${esc(due.label)}</td>
+              <td><button class="btn" data-proj-edit="${esc(p.id)}">Editar</button></td>
+            </tr>`; }).join("")}
+        </tbody>
+      </table></div>
+      ${list.length === 0 ? '<div class="empty">No hay proyectos con esos filtros.</div>' : ""}`;
+    wireProjActions(el);
+  }
+
+  function renderProjKanban(list) {
+    const el = $("#projects-body");
+    const byStatus = {};
+    PROJ_STATUSES.forEach((s) => (byStatus[s.key] = []));
+    list.forEach((p) => (byStatus[p.status] || (byStatus[p.status] = [])).push(p));
+    el.innerHTML = `<div class="kanban">
+      ${PROJ_STATUSES.map((s) => `
+        <div class="kanban-col" data-proj-col="${esc(s.key)}">
+          <div class="kanban-col-head"><span class="kc-title">${esc(s.key)}</span><span class="kc-count">${byStatus[s.key].length}</span></div>
+          <div class="kanban-cards">
+            ${byStatus[s.key].map((p) => projCard(p)).join("") || '<div class="kanban-empty">—</div>'}
+          </div>
+        </div>`).join("")}
+    </div>`;
+    wireProjActions(el);
+    wireProjDnD(el);
+  }
+
+  function projCard(p) {
+    const due = dueMeta(p); const pr = projProgress(p);
+    return `
+      <div class="kanban-card proj-card-k" draggable="true" data-proj-detail="${esc(p.id)}" data-proj-id="${esc(p.id)}">
+        <div class="kc-merchant">${esc(p.name)}</div>
+        <div class="kc-meta">${esc(respLabel(p))}</div>
+        <div class="proj-card-foot">${prioPill(p.prioridad)}<span class="proj-due ${due.cls}">${esc(due.label)}</span></div>
+        <div class="proj-progress-cell">${progressBar(pr)}<span class="pp-num">${pr}%</span></div>
+      </div>`;
+  }
+
+  function wireProjActions(root) {
+    root.querySelectorAll("[data-proj-detail]").forEach((elm) =>
+      elm.addEventListener("click", (ev) => {
+        if (ev.target.closest("[data-proj-edit]")) return;
+        openProjectDetail(elm.dataset.projDetail);
+      }));
+    root.querySelectorAll("[data-proj-edit]").forEach((b) =>
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); openProjectForm(projById(b.dataset.projEdit)); }));
+  }
+
+  // Arrastrar tarjetas entre columnas del Kanban para cambiar el estado.
+  function wireProjDnD(root) {
+    let dragId = null;
+    root.querySelectorAll(".proj-card-k").forEach((card) => {
+      card.addEventListener("dragstart", (ev) => { dragId = card.dataset.projId; card.classList.add("dragging"); ev.dataTransfer.effectAllowed = "move"; });
+      card.addEventListener("dragend", () => { dragId = null; card.classList.remove("dragging"); root.querySelectorAll(".kanban-col").forEach((c) => c.classList.remove("drop-target")); });
+    });
+    root.querySelectorAll(".kanban-col").forEach((col) => {
+      col.addEventListener("dragover", (ev) => { ev.preventDefault(); col.classList.add("drop-target"); });
+      col.addEventListener("dragleave", () => col.classList.remove("drop-target"));
+      col.addEventListener("drop", async (ev) => {
+        ev.preventDefault(); col.classList.remove("drop-target");
+        const p = projById(dragId); const newStatus = col.dataset.projCol;
+        if (p && newStatus && p.status !== newStatus) { await putProject({ ...p, status: newStatus }); refreshProjViews(p.id); }
+      });
+    });
+  }
+
+  async function putProject(p) {
+    const updated = await api(`/api/projects/${encodeURIComponent(p.id)}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p),
+    });
+    const i = state.projects.findIndex((x) => x.id === p.id);
+    if (i >= 0) state.projects[i] = updated;
+    return updated;
+  }
+
+  function refreshProjViews(id) {
+    populateProjFilters();
+    renderProjBody();
+    if (state.projDetailId && (!id || state.projDetailId === id)) {
+      const p = projById(state.projDetailId);
+      if (p) renderProjectDetail(p);
+    }
+  }
+
+  // ---- formulario crear / editar ----
+  function openProjectForm(p) {
+    const isNew = !p;
+    p = p || { status: "Planeado", prioridad: "Media", responsables: [], progreso: 0 };
+    const merchOpts = state.merchants.map((m) => `<option value="${m.id}" ${m.id === p.merchantId ? "selected" : ""}>${esc(m.name)} (${esc(m.id)})</option>`).join("");
+    const body = `
+      <form class="cred-form"><div class="cred-form-grid">
+        <label class="cf-wide">Nombre del proyecto<input id="pj-name" required value="${esc(p.name || "")}"></label>
+        <label class="cf-wide">Descripción<textarea id="pj-desc" rows="2">${esc(p.description || "")}</textarea></label>
+        <label class="cf-wide">Responsables (separa con comas)<input id="pj-resp" value="${esc((p.responsables || []).join(", "))}" placeholder="Ej: Richard Mosqueda, Ahiezer Dominguez"></label>
+        <label>Fecha de inicio<input type="date" id="pj-inicio" value="${esc(p.fechaInicio || "")}"></label>
+        <label>Fecha de entrega<input type="date" id="pj-entrega" value="${esc(p.fechaEntrega || "")}"></label>
+        <label>Estado<select id="pj-status">${PROJ_STATUSES.map((s) => `<option value="${esc(s.key)}" ${s.key === p.status ? "selected" : ""}>${esc(s.key)}</option>`).join("")}</select></label>
+        <label>Prioridad<select id="pj-prio">${opt(PROJ_PRIORITIES, p.prioridad)}</select></label>
+        <label>Progreso (%) <span class="cf-hint">— se calcula solo si hay tareas</span><input type="number" min="0" max="100" id="pj-prog" value="${p.progreso || 0}"></label>
+        <label class="cf-wide">Comercio relacionado (opcional)<select id="pj-merchant"><option value="">Ninguno</option>${merchOpts}</select></label>
+      </div></form>`;
+    openModal(isNew ? "Agregar proyecto" : `Editar proyecto · ${esc(p.name)}`, body,
+      `<button class="btn" data-modal-close>Cancelar</button>
+       <button class="btn btn-primary" id="pj-save">${isNew ? "Crear proyecto" : "Guardar cambios"}</button>`);
+    $("#pj-save").addEventListener("click", () => saveProjectForm(isNew ? null : p));
+  }
+
+  async function saveProjectForm(existing) {
+    const name = $("#pj-name").value.trim();
+    if (!name) { $("#pj-name").focus(); return; }
+    const body = {
+      ...(existing || {}),
+      name,
+      description: $("#pj-desc").value.trim(),
+      responsables: $("#pj-resp").value.split(",").map((s) => s.trim()).filter(Boolean),
+      fechaInicio: $("#pj-inicio").value || null,
+      fechaEntrega: $("#pj-entrega").value || null,
+      status: $("#pj-status").value,
+      prioridad: $("#pj-prio").value,
+      progreso: Math.max(0, Math.min(100, Number($("#pj-prog").value) || 0)),
+      merchantId: $("#pj-merchant").value || null,
+    };
+    if (existing) {
+      await putProject({ ...body, id: existing.id });
+    } else {
+      body.tasks = []; body.seguimiento = [];
+      const created = await api("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      state.projects.push(created);
+    }
+    closeModal();
+    refreshProjViews(existing ? existing.id : null);
+  }
+
+  // ---- detalle del proyecto ----
+  function openProjectDetail(id) {
+    const p = projById(id);
+    if (!p) return;
+    state.projDetailId = id;
+    renderProjectDetail(p);
+    switchView("project-detail");
+  }
+
+  function renderProjectDetail(p) {
+    const el = $("#project-detail");
+    const pr = projProgress(p);
+    const due = dueMeta(p);
+    const tasks = p.tasks || [];
+    const log = (p.seguimiento || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+
+    el.innerHTML = `
+      <div class="ad-top"><button class="btn" id="pj-back">← Volver</button></div>
+      <div class="card cred-detail-head">
+        <div class="cdh-main">
+          <div class="cdh-kicker">${projStatusChip(p.status)} ${prioPill(p.prioridad)} Proyecto ${esc(p.id)}</div>
+          <h1 class="ad-title">${esc(p.name)}</h1>
+          <p class="ad-msg">${esc(respLabel(p))}${p.merchantId ? " · " + esc(merchantLabel(p.merchantId)) : ""}</p>
+          <div class="proj-head-progress">${progressBar(pr)}<span class="pp-num">${pr}%</span></div>
         </div>
-        <p>${esc(p.description)}</p>
-        <div class="project-foot">
-          <span>${esc(p.owner)}</span>
-          <span>Actualizado ${fmtDate.format(parseDay(p.updatedAt))}</span>
+        <div class="cdh-actions"><button class="btn btn-primary" id="pj-edit">Editar</button></div>
+      </div>
+
+      <div class="dash-block" style="margin-top:22px">
+        <div class="block-label">Detalles</div>
+        <div class="card">
+          <p class="proj-desc">${p.description ? esc(p.description) : '<span class="tt-muted">Sin descripción.</span>'}</p>
+          <div class="ad-grid" style="margin-top:14px">
+            ${detailField("Estado", projStatusChip(p.status))}
+            ${detailField("Prioridad", prioPill(p.prioridad) || "—")}
+            ${detailField("Responsables", esc(respLabel(p)))}
+            ${detailField("Fecha de inicio", p.fechaInicio ? esc(fmtDate.format(parseDay(p.fechaInicio))) : "—")}
+            ${detailField("Fecha de entrega", `<span class="${due.cls}">${esc(due.label)}</span>`)}
+            ${detailField("Progreso", pr + "%")}
+            ${p.merchantId ? detailField("Comercio", esc(merchantLabel(p.merchantId))) : ""}
+          </div>
         </div>
-      </div>`).join("");
+      </div>
+
+      <div class="grid grid-2">
+        <div class="dash-block">
+          <div class="block-label">Tareas</div>
+          <div class="card">
+            <div class="checklist">
+              ${tasks.length ? tasks.map((t) => `
+                <div class="check-item ${t.done ? "done" : ""}">
+                  <label class="check-box"><input type="checkbox" data-task-toggle="${esc(t.id)}" ${t.done ? "checked" : ""}></label>
+                  <span class="check-title">${esc(t.title)}</span>
+                  <button class="btn btn-ghost check-del" data-task-del="${esc(t.id)}" title="Quitar">✕</button>
+                </div>`).join("") : '<div class="empty">Sin tareas todavía. Agrega la primera.</div>'}
+            </div>
+            <form class="task-add" id="task-add">
+              <input id="task-input" placeholder="Nueva tarea…" autocomplete="off">
+              <button type="submit" class="btn btn-primary btn-sm">Agregar</button>
+            </form>
+            ${tasks.length ? `<div class="task-progress-note">${tasks.filter((t) => t.done).length}/${tasks.length} completadas · progreso ${pr}%</div>` : ""}
+          </div>
+        </div>
+
+        <div class="dash-block">
+          <div class="block-label">Seguimiento</div>
+          <div class="card">
+            <button class="btn btn-sm" id="log-add-btn" style="margin-bottom:14px">Agregar seguimiento</button>
+            <div class="timeline">
+              ${log.length ? log.map((e) => `
+                <div class="timeline-item">
+                  <span class="tl-dot"></span>
+                  <div class="tl-body">
+                    <div class="tl-head"><span class="tl-date">${e.date ? esc(fmtDate.format(parseDay(e.date))) : ""}</span> · <span class="tl-author">${esc(e.author || "")}</span></div>
+                    <div class="tl-note">${esc(e.note || "")}</div>
+                  </div>
+                </div>`).join("") : '<div class="empty">Sin entradas de seguimiento todavía.</div>'}
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    $("#pj-back").addEventListener("click", () => { state.projDetailId = null; switchView("projects"); });
+    $("#pj-edit").addEventListener("click", () => openProjectForm(projById(p.id)));
+    $("#task-add").addEventListener("submit", (ev) => { ev.preventDefault(); addTask(p.id, $("#task-input").value); });
+    el.querySelectorAll("[data-task-toggle]").forEach((cb) => cb.addEventListener("change", () => toggleTask(p.id, cb.dataset.taskToggle, cb.checked)));
+    el.querySelectorAll("[data-task-del]").forEach((b) => b.addEventListener("click", () => delTask(p.id, b.dataset.taskDel)));
+    $("#log-add-btn").addEventListener("click", () => openLogForm(p.id));
+  }
+
+  async function addTask(id, title) {
+    title = (title || "").trim();
+    if (!title) return;
+    const p = projById(id);
+    const tasks = [...(p.tasks || []), { id: "T-" + Date.now(), title, done: false }];
+    await putProject({ ...p, tasks });
+    refreshProjViews(id);
+  }
+  async function toggleTask(id, tid, done) {
+    const p = projById(id);
+    const tasks = (p.tasks || []).map((t) => (t.id === tid ? { ...t, done } : t));
+    await putProject({ ...p, tasks });
+    refreshProjViews(id);
+  }
+  async function delTask(id, tid) {
+    const p = projById(id);
+    const tasks = (p.tasks || []).filter((t) => t.id !== tid);
+    await putProject({ ...p, tasks });
+    refreshProjViews(id);
+  }
+
+  function openLogForm(id) {
+    const body = `
+      <form class="cred-form"><div class="cred-form-grid">
+        <label class="cf-wide">Autor<input id="log-author" value="Richard Mosqueda"></label>
+        <label class="cf-wide">Nota<textarea id="log-note" rows="3" placeholder="¿Qué avanzó o cambió?"></textarea></label>
+      </div></form>`;
+    openModal("Agregar seguimiento", body,
+      `<button class="btn" data-modal-close>Cancelar</button>
+       <button class="btn btn-primary" id="log-save">Guardar</button>`);
+    $("#log-save").addEventListener("click", async () => {
+      const note = $("#log-note").value.trim();
+      if (!note) { $("#log-note").focus(); return; }
+      const author = $("#log-author").value.trim() || "Equipo Adquirencia";
+      const p = projById(id);
+      const seguimiento = [...(p.seguimiento || []), { date: isoToday(), author, note }];
+      await putProject({ ...p, seguimiento });
+      closeModal();
+      refreshProjViews(id);
+    });
+    $("#log-note").focus();
   }
 
   // ---------- credenciales (ciclo de vida) ----------
