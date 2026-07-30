@@ -62,12 +62,6 @@
           </div>
           <div class="filters" id="filters">
             <div class="filter">
-              <label for="f-merchant">Comercio</label>
-              <select id="f-merchant">
-                <option value="">Todos los comercios</option>
-              </select>
-            </div>
-            <div class="filter">
               <label for="f-range">Periodo</label>
               <select id="f-range">
                 <option value="today">Hoy</option>
@@ -152,7 +146,7 @@
           <div class="block-label">Detalle</div>
           <div class="grid grid-2">
             <article class="card">
-              <header class="card-head"><h2>Códigos DR más frecuentes</h2><span class="card-sub">sobre rechazos del periodo</span></header>
+              <header class="card-head"><h2>Códigos de rechazo más frecuentes</h2><span class="card-sub">sobre rechazos del periodo</span></header>
               <div id="dr-table"></div>
             </article>
             <article class="card">
@@ -282,9 +276,12 @@
                 <input type="number" id="c-intl-tx" min="0" step="1" value="0">
               </label>
 
-              <div class="calc-section-label">Pricing PagueloFacil <span class="calc-hint">— por defecto 3.5% + $0.50 por trx</span></div>
-              <label>Tasa PF (%)
+              <div class="calc-section-label">Pricing PagueloFacil <span class="calc-hint">— por defecto 3.5% nacional, 4.5% internacional + $0.50 por trx</span></div>
+              <label>Tasa de comisión nacional (%)
                 <input type="number" id="c-pf-rate" min="0" step="any" value="3.5">
+              </label>
+              <label>Tasa de comisión internacional (%)
+                <input type="number" id="c-pf-intl-rate" min="0" step="any" value="4.5">
               </label>
               <label>Fee fijo PF por trx (USD)
                 <input type="number" id="c-pf-fee" min="0" step="any" value="0.50">
@@ -371,10 +368,10 @@
                 <label>Condición
                   <select id="r-condition"></select>
                 </label>
-                <label id="r-drcode-wrap" hidden>Código DR
+                <label id="r-drcode-wrap" hidden>Código de rechazo
                   <select id="r-drcode"></select>
                 </label>
-                <label>Umbral
+                <label><span id="r-threshold-label">Porcentaje (%)</span>
                   <input type="number" id="r-threshold" min="1" step="1" value="20" required>
                 </label>
                 <label>Plan de acción
@@ -395,7 +392,7 @@
                   <input type="text" id="ap-desc" required placeholder="Resumen en una línea del plan">
                 </label>
                 <label>Pasos (uno por línea)
-                  <textarea id="ap-steps" rows="4" placeholder="Identificar los códigos DR más frecuentes&#10;Contactar al comercio afectado&#10;Escalar al emisor o a PagueloFacil"></textarea>
+                  <textarea id="ap-steps" rows="4" placeholder="Identificar los códigos de rechazo más frecuentes&#10;Contactar al comercio afectado&#10;Escalar al emisor o a PagueloFacil"></textarea>
                 </label>
                 <button type="submit" class="btn btn-primary">Crear plan de acción</button>
               </form>

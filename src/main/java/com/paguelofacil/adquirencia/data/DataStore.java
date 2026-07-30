@@ -244,7 +244,8 @@ public class DataStore {
     private ServiceType pickService(Random rnd, MerchantProfile p) {
         double r = rnd.nextDouble();
         double acc = 0;
-        for (int i = 0; i < p.serviceWeights.length; i++) {
+        int n = Math.min(p.serviceWeights.length, ServiceType.values().length);
+        for (int i = 0; i < n; i++) {
             acc += p.serviceWeights[i];
             if (r < acc) {
                 return ServiceType.values()[i];
@@ -281,29 +282,29 @@ public class DataStore {
     private MerchantProfile profileFor(String merchantId) {
         return switch (merchantId) {
             case "28714" -> new MerchantProfile(38, 42.0, 0.45, 0.55, 0.92, 0.012,
-                    new double[]{0.55, 0.05, 0.05, 0.30, 0.05});
+                    new double[]{0.85, 0.05, 0.05, 0.05});
             case "28715" -> new MerchantProfile(26, 18.5, 0.40, 0.50, 0.93, 0.008,
-                    new double[]{0.60, 0.05, 0.10, 0.20, 0.05});
+                    new double[]{0.80, 0.05, 0.10, 0.05});
             case "28716" -> new MerchantProfile(14, 210.0, 0.35, 0.70, 0.90, 0.030,
-                    new double[]{0.45, 0.05, 0.25, 0.15, 0.10});
+                    new double[]{0.60, 0.05, 0.25, 0.10});
             case "28717" -> new MerchantProfile(20, 34.0, 0.50, 0.45, 0.91, 0.015,
-                    new double[]{0.50, 0.02, 0.28, 0.15, 0.05});
+                    new double[]{0.65, 0.02, 0.28, 0.05});
             case "28722" -> new MerchantProfile(22, 55.0, 0.45, 0.60, 0.90, 0.045,
-                    new double[]{0.40, 0.05, 0.15, 0.35, 0.05});
+                    new double[]{0.75, 0.05, 0.15, 0.05});
             case "28719" -> new MerchantProfile(9, 125.0, 0.30, 0.55, 0.92, 0.010,
-                    new double[]{0.25, 0.45, 0.20, 0.05, 0.05});
+                    new double[]{0.30, 0.45, 0.20, 0.05});
             case "28720" -> new MerchantProfile(12, 45.0, 0.35, 0.50, 0.89, 0.020,
-                    new double[]{0.15, 0.65, 0.10, 0.05, 0.05});
+                    new double[]{0.20, 0.65, 0.10, 0.05});
             case "28721" -> new MerchantProfile(11, 68.0, 0.55, 0.40, 0.92, 0.010,
-                    new double[]{0.60, 0.02, 0.18, 0.15, 0.05});
+                    new double[]{0.75, 0.02, 0.18, 0.05});
             case "28723" -> new MerchantProfile(8, 320.0, 0.40, 0.75, 0.88, 0.035,
-                    new double[]{0.35, 0.05, 0.35, 0.15, 0.10});
+                    new double[]{0.50, 0.05, 0.35, 0.10});
             case "28724" -> new MerchantProfile(10, 95.0, 0.35, 0.55, 0.93, 0.008,
-                    new double[]{0.45, 0.20, 0.25, 0.05, 0.05});
+                    new double[]{0.50, 0.20, 0.25, 0.05});
             case "28725" -> new MerchantProfile(7, 22.0, 0.45, 0.45, 0.93, 0.010,
-                    new double[]{0.50, 0.02, 0.18, 0.25, 0.05});
+                    new double[]{0.75, 0.02, 0.18, 0.05});
             default -> new MerchantProfile(16, 240.0, 0.50, 0.65, 0.90, 0.025,
-                    new double[]{0.45, 0.05, 0.10, 0.30, 0.10});
+                    new double[]{0.75, 0.05, 0.10, 0.10});
         };
     }
 
@@ -397,7 +398,7 @@ public class DataStore {
                 new ProjectLog(LocalDate.now().minusDays(6), "Ahiezer Dominguez", "Primer prototipo del job de conciliación corriendo en pruebas."))));
         projects.add(p2);
 
-        Project p3 = proj("P-003", "Catálogo unificado de códigos DR",
+        Project p3 = proj("P-003", "Catálogo unificado de códigos de rechazo",
                 "Mapear los códigos de rechazo de todos los procesadores a un catálogo único con acciones sugeridas.",
                 "Completado", "Media", List.of("Richard Mosqueda"), -60, -5);
         p3.setTasks(new ArrayList<>(List.of(
@@ -472,7 +473,7 @@ public class DataStore {
 
     private void seedDocuments() {
         LocalDate today = LocalDate.now();
-        documents.add(new DocumentItem("D-001", "Catálogo de códigos de rechazo (DR)",
+        documents.add(new DocumentItem("D-001", "Catálogo de códigos de rechazo",
                 "Códigos de rechazo", "Referencia operativa oficial: cada código de rechazo con su motivo "
                         + "y plan de acción recomendado. Ábrelo para consultarlo o imprimirlo.",
                 today));
