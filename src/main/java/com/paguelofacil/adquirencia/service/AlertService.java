@@ -84,8 +84,9 @@ public class AlertService {
         return !inUse && store.actionPlans().removeIf(p -> p.getId().equals(id));
     }
 
+    /** Se puede eliminar cualquier regla, incluidas las estándar preconfiguradas. */
     public boolean deleteRule(String id) {
-        return store.alertRules().removeIf(r -> r.getId().equals(id) && !r.isStandard());
+        return store.alertRules().removeIf(r -> r.getId().equals(id));
     }
 
     // ---------- evaluación ----------
@@ -173,9 +174,11 @@ public class AlertService {
 
         Metric metric = metric(rule, scope, today, alert.processor());
         String unit = metric.unit();
+        // según cómo se mida la condición, el límite es un porcentaje o una cantidad
+        String limitWord = "%".equals(unit) ? "un porcentaje configurado de" : "una cantidad configurada de";
         String magnitude = metric.threshold() > 0
-                ? String.format("%s%s frente a un umbral de %s%s (%.1f×)",
-                        fmt(metric.value()), unit, fmt(metric.threshold()), unit,
+                ? String.format("%s%s frente a %s %s%s (%.1f×)",
+                        fmt(metric.value()), unit, limitWord, fmt(metric.threshold()), unit,
                         metric.value() / metric.threshold())
                 : String.format("%s%s", fmt(metric.value()), unit);
 
@@ -274,7 +277,7 @@ public class AlertService {
                 double pct = pct(declined, sales.size());
                 yield sales.size() >= 20 && pct > rule.getThreshold()
                         ? Optional.of(build(rule, severityByExcess(pct, rule.getThreshold()),
-                                String.format("Tasa de rechazo de hoy en %.1f%% (umbral %.0f%%, %d de %d trx).",
+                                String.format("Tasa de rechazo de hoy en %.1f%% (porcentaje configurado %.0f%%, %d de %d trx).",
                                         pct, rule.getThreshold(), declined, sales.size()), null))
                         : Optional.empty();
             }
@@ -282,7 +285,7 @@ public class AlertService {
                 long declined = sales.stream().filter(t -> !t.approved()).count();
                 yield declined > rule.getThreshold()
                         ? Optional.of(build(rule, severityByExcess(declined, rule.getThreshold()),
-                                String.format("%d transacciones rechazadas hoy (umbral %.0f).",
+                                String.format("%d transacciones rechazadas hoy (cantidad configurada %.0f).",
                                         declined, rule.getThreshold()), null))
                         : Optional.empty();
             }
@@ -303,7 +306,7 @@ public class AlertService {
                 double pct = vol.signum() == 0 ? 0 : ref.doubleValue() * 100.0 / vol.doubleValue();
                 yield pct > rule.getThreshold()
                         ? Optional.of(build(rule, severityByExcess(pct, rule.getThreshold()),
-                                String.format("Índice de reembolsos (7 días) en %.1f%% (umbral %.0f%%).",
+                                String.format("Índice de reembolsos (7 días) en %.1f%% (porcentaje configurado %.0f%%).",
                                         pct, rule.getThreshold()), null))
                         : Optional.empty();
             }
@@ -314,7 +317,7 @@ public class AlertService {
                 double pct = pct(failures, with3ds.size());
                 yield with3ds.size() >= 20 && pct > rule.getThreshold()
                         ? Optional.of(build(rule, severityByExcess(pct, rule.getThreshold()),
-                                String.format("Fallas de autenticación 3DS en %.1f%% de %d trx con 3DS (umbral %.0f%%).",
+                                String.format("Fallas de autenticación 3DS en %.1f%% de %d trx con 3DS (porcentaje configurado %.0f%%).",
                                         pct, with3ds.size(), rule.getThreshold()), null))
                         : Optional.empty();
             }
@@ -324,7 +327,7 @@ public class AlertService {
                         .filter(t -> !t.approved() && code.equals(t.drCode())).count();
                 yield count > rule.getThreshold()
                         ? Optional.of(build(rule, severityByExcess(count, rule.getThreshold()),
-                                String.format("Código DR %s repetido %d veces hoy (umbral %.0f). %s",
+                                String.format("Código de rechazo %s repetido %d veces hoy (cantidad configurada %.0f). %s",
                                         code, count, rule.getThreshold(),
                                         com.paguelofacil.adquirencia.data.DataStore.DR_CODES
                                                 .getOrDefault(code, "")), null))
@@ -396,7 +399,7 @@ public class AlertService {
         return total == 0 ? 0 : part * 100.0 / total;
     }
 
-    /** Escala la severidad según cuánto se excede el umbral. */
+    /** Escala la severidad según cuánto se excede el valor configurado. */
     private static Alert.Severity severityByExcess(double value, double threshold) {
         if (threshold <= 0) return Alert.Severity.WARNING;
         double ratio = value / threshold;

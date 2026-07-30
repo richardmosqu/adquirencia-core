@@ -34,18 +34,20 @@
     { value: "AUTH_CAPTURE", label: "Auth/Capture" },
     { value: "RECURRENCIA", label: "Recurrencia" },
     { value: "LINK_PAGO", label: "Link de pago" },
-    { value: "CHECKOUT", label: "Checkout" },
     { value: "API", label: "API" },
   ];
+  // pctBased: la condición se mide en porcentaje; si no, se mide en cantidad de
+  // ocurrencias. De ahí sale la etiqueta del campo (Porcentaje / Cantidad).
   const CONDITIONS = [
-    { value: "REJECT_RATE_ABOVE", label: "Tasa de rechazo mayor a umbral (%)" },
-    { value: "DECLINED_COUNT_ABOVE", label: "Rechazadas en el día mayores a umbral" },
-    { value: "REFUND_RATE_ABOVE", label: "Índice de reembolsos mayor a umbral (%)" },
-    { value: "THREE_DS_FAILURE_RATE_ABOVE", label: "Fallas 3DS mayores a umbral (%)" },
-    { value: "DR_CODE_RECURRENT", label: "Código DR recurrente (ocurrencias)" },
-    { value: "CHANNEL_VOLUME_DROP", label: "Caída de volumen de canal (%)" },
-    { value: "INTERNAL_ERRORS_ABOVE", label: "Errores internos mayores a umbral" },
+    { value: "REJECT_RATE_ABOVE", label: "Tasa de rechazo mayor al porcentaje (%)", pctBased: true },
+    { value: "DECLINED_COUNT_ABOVE", label: "Rechazadas en el día mayores a la cantidad", pctBased: false },
+    { value: "REFUND_RATE_ABOVE", label: "Índice de reembolsos mayor al porcentaje (%)", pctBased: true },
+    { value: "THREE_DS_FAILURE_RATE_ABOVE", label: "Fallas 3DS mayores al porcentaje (%)", pctBased: true },
+    { value: "DR_CODE_RECURRENT", label: "Código de rechazo recurrente (cantidad de ocurrencias)", pctBased: false },
+    { value: "CHANNEL_VOLUME_DROP", label: "Caída de volumen de canal mayor al porcentaje (%)", pctBased: true },
+    { value: "INTERNAL_ERRORS_ABOVE", label: "Errores internos mayores a la cantidad", pctBased: false },
   ];
+  const isPctCondition = (c) => (CONDITIONS.find((x) => x.value === c) || {}).pctBased === true;
   const SEVERITY_LABEL = { WARNING: "Atención", SERIOUS: "Serio", CRITICAL: "Crítico" };
   const SEVERITY_CLASS = { WARNING: "warning", SERIOUS: "serious", CRITICAL: "critical" };
 
@@ -297,9 +299,6 @@
     state.merchants = merchants;
     state.drCodes = drCodes;
 
-    const mSel = $("#f-merchant");
-    merchants.forEach((m) => mSel.append(new Option(`${m.name} (${m.id})`, m.id)));
-
     const sSel = $("#f-service");
     SERVICES.forEach((s) => sSel.append(new Option(s.label, s.value)));
 
@@ -347,7 +346,6 @@
       $("#f-custom").hidden = $("#f-range").value !== "custom";
       if ($("#f-range").value !== "custom") loadDashboard();
     });
-    $("#f-merchant").addEventListener("change", loadDashboard);
     $("#f-service").addEventListener("change", loadDashboard);
     $("#f-from").addEventListener("change", loadDashboard);
     $("#f-to").addEventListener("change", loadDashboard);
@@ -355,9 +353,8 @@
     $("#r-scope").addEventListener("change", () => {
       $("#r-merchant-wrap").hidden = $("#r-scope").value !== "MERCHANT";
     });
-    $("#r-condition").addEventListener("change", () => {
-      $("#r-drcode-wrap").hidden = $("#r-condition").value !== "DR_CODE_RECURRENT";
-    });
+    $("#r-condition").addEventListener("change", syncRuleCondition);
+    syncRuleCondition();
     $("#rule-form").addEventListener("submit", onCreateRule);
     $("#ap-form").addEventListener("submit", onCreatePlan);
 
@@ -396,6 +393,17 @@
     $("#calc-reset").addEventListener("click", () => { $("#calc-result").innerHTML = ""; });
     $("#acq-form").addEventListener("submit", onAcqSubmit);
     $("#acq-cancel").addEventListener("click", resetAcqForm);
+  }
+
+  /**
+   * Ajusta el formulario de regla a la condición elegida: el código de rechazo
+   * solo aplica a la condición recurrente, y el valor límite se pide como
+   * porcentaje o como cantidad según cómo se mide la condición.
+   */
+  function syncRuleCondition() {
+    const cond = $("#r-condition").value;
+    $("#r-drcode-wrap").hidden = cond !== "DR_CODE_RECURRENT";
+    $("#r-threshold-label").textContent = isPctCondition(cond) ? "Porcentaje (%)" : "Cantidad";
   }
 
   function switchView(view) {
@@ -471,7 +479,6 @@
   function filterParams() {
     const { from, to } = currentRange();
     const p = new URLSearchParams();
-    if ($("#f-merchant").value) p.set("merchantId", $("#f-merchant").value);
     if ($("#f-service").value) p.set("service", $("#f-service").value);
     if (from) p.set("from", from);
     if (to) p.set("to", to);
@@ -720,9 +727,9 @@
             ${detailField("Magnitud del problema", `<b class="sig-bad">${esc(d.magnitudeText)}</b>`)}
             ${detailField("Comercio afectado", `<b>${esc(a.merchantName ? nameId(a.merchantName, a.merchantId) : d.scopeLabel)}</b>`)}
             ${detailField("Condición evaluada", esc(d.conditionLabel))}
-            ${detailField(d.metric.label, `<b>${esc(fmtMetric(d.metric))}</b> · umbral ${esc(fmtNum(d.metric.threshold))}${esc(d.metric.unit)}`)}
+            ${detailField(d.metric.label, `<b>${esc(fmtMetric(d.metric))}</b> · ${d.metric.unit === "%" ? "porcentaje" : "cantidad"} configurado ${esc(fmtNum(d.metric.threshold))}${esc(d.metric.unit)}`)}
             ${detailField("Transacciones evaluadas (hoy)", `${int(d.txEvaluated)} · ${int(d.declinedCount)} rechazadas`)}
-            ${d.drCode ? detailField("Código DR", `<b>${esc(d.drCode)}</b> — ${esc(d.drDescription || "")}`) : ""}
+            ${d.drCode ? detailField("Código de rechazo", `<b>${esc(d.drCode)}</b> — ${esc(d.drDescription || "")}`) : ""}
             ${detailField("Importe de la operación", d.sampleAmount != null ? moneyC(d.sampleAmount) : "—")}
             ${detailField("Hora de la operación", esc(fmtDateTime.format(new Date(d.sampleTime))))}
           </div>
@@ -1705,7 +1712,6 @@
       <div class="cred-fields">
         ${credField(credLabels(c.processor).id, c.powertranzId, true)}
         ${credField(credLabels(c.processor).secret, c.contrasena, true)}
-        ${c.processor !== "EVERTEC" ? credField("PW Admin Site", c.pwAdminSite, true) : ""}
         ${credField("Tarjetas", c.tarjetas, true)}
         ${credField("Monedas", c.monedas, true)}
         ${credField("3DS", c.threeDs ? "Sí" : "No", false)}
@@ -1766,7 +1772,6 @@
           <div class="cf-section">Credenciales</div>
           <label><span id="cf-lbl-id">${esc(credLabels(c.processor).id)}</span><input id="cf-ptid" value="${esc(c.powertranzId || "")}"></label>
           <label><span id="cf-lbl-secret">${esc(credLabels(c.processor).secret)}</span><input id="cf-pass" value="${esc(c.contrasena || "")}"></label>
-          <label id="cf-adminpw-wrap" ${c.processor === "EVERTEC" ? "hidden" : ""}>PW Admin Site<input id="cf-adminpw" value="${esc(c.pwAdminSite || "")}"></label>
           <label>Tarjetas<input id="cf-tarjetas" value="${esc(c.tarjetas || "")}"></label>
           <label>Monedas<input id="cf-monedas" value="${esc(c.monedas || "")}"></label>
           <label>Límite por Trx (USD)<input type="number" step="any" id="cf-pertx" value="${c.limitePorTrx || ""}"></label>
@@ -1789,7 +1794,6 @@
       const L = credLabels($("#cf-proc").value);
       $("#cf-lbl-id").textContent = L.id;
       $("#cf-lbl-secret").textContent = L.secret;
-      $("#cf-adminpw-wrap").hidden = $("#cf-proc").value === "EVERTEC";
     });
     $("#cf-save").addEventListener("click", () => saveCredForm(isNew ? null : c));
   }
@@ -1808,7 +1812,6 @@
       threeDs: $("#cf-3ds").checked,
       powertranzId: $("#cf-ptid").value.trim(),
       contrasena: $("#cf-pass").value.trim(),
-      pwAdminSite: $("#cf-adminpw").value.trim(),
       tarjetas: $("#cf-tarjetas").value.trim(),
       monedas: $("#cf-monedas").value.trim(),
       limitePorTrx: num("#cf-pertx"),
@@ -1974,6 +1977,7 @@
   // ---------- puntos de pago ----------
 
   const POINT_BANKS = ["Towerbank", "BAC"];
+  // Solo sugerencias: el dispositivo se escribe a mano para no limitar los modelos.
   const POINT_DEVICES = ["POS Android", "POS clásico", "mPOS", "SoftPOS"];
   const POINT_STATUSES = ["Operativo", "Por instalar", "En reparación", "Sin conexión"];
 
@@ -1998,9 +2002,11 @@
     }
     $("#points-table").innerHTML = `
       <div class="table-wrap"><table class="data">
-        <thead><tr><th>ID</th><th>Comercio</th><th>Banco</th><th>Dispositivo</th><th>Serial</th><th>Estado</th><th></th></tr></thead>
+        <thead><tr><th>ID</th><th>Comercio</th><th>Banco</th><th>Dispositivo</th><th>Serial</th><th>Estado</th><th>Historial</th><th></th></tr></thead>
         <tbody>
-          ${points.map((p) => `
+          ${points.map((p) => {
+            const prev = previousAssignments(p);
+            return `
             <tr>
               <td>${esc(p.id)}</td>
               <td>${p.merchantId ? esc(merchantLabel(p.merchantId)) : '<span class="unassigned">Sin asignar</span>'}</td>
@@ -2008,12 +2014,58 @@
               <td>${esc(p.deviceType || "—")}</td>
               <td><code>${esc(p.serial || "—")}</code></td>
               <td>${chip(p.status)}</td>
+              <td>${prev.length
+                  ? `<button class="btn btn-ghost" data-point-history="${esc(p.id)}">Ver historial (${prev.length})</button>`
+                  : '<span class="tt-muted">Sin asignaciones previas</span>'}</td>
               <td><button class="btn" data-point-edit="${esc(p.id)}">Editar</button></td>
-            </tr>`).join("")}
+            </tr>`; }).join("")}
         </tbody>
       </table></div>`;
     document.querySelectorAll("[data-point-edit]").forEach((b) =>
-      b.addEventListener("click", () => openPointForm(state.paymentPoints.find((p) => p.id === b.dataset.pointEdit))));
+      b.addEventListener("click", () => openPointForm(pointById(b.dataset.pointEdit))));
+    document.querySelectorAll("[data-point-history]").forEach((b) =>
+      b.addEventListener("click", () => openPointHistory(pointById(b.dataset.pointHistory))));
+  }
+
+  const pointById = (id) => state.paymentPoints.find((p) => p.id === id);
+
+  // Asignaciones ya cerradas (el comercio al que estuvo asignado antes).
+  const previousAssignments = (p) =>
+    (p.assignmentHistory || []).filter((a) => a.hasta).slice().reverse();
+
+  /** Historial de a qué comercios estuvo asignado este POS antes del actual. */
+  function openPointHistory(p) {
+    if (!p) return;
+    const prev = previousAssignments(p);
+    const current = (p.assignmentHistory || []).find((a) => !a.hasta);
+    const body = `
+      <div class="ver-head">
+        <div>
+          <div class="ver-merchant">${esc(pointMerchant(p.merchantId))}</div>
+          <div class="ver-sub">${esc(p.bank || "—")} · ${esc(p.deviceType || "—")} · ${esc(p.serial || "")}</div>
+        </div>
+        ${chip(p.status)}
+      </div>
+      <div class="ad-grid" style="margin-bottom:16px">
+        ${detailField("Asignación actual", current
+          ? `<b>${esc(merchantLabel(current.merchantId))}</b> · desde ${esc(fmtDate.format(parseDay(current.desde)))}`
+          : '<span class="tt-muted">Sin asignar</span>')}
+      </div>
+      ${prev.length ? `
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th>Comercio</th><th>Desde</th><th>Hasta</th></tr></thead>
+          <tbody>
+            ${prev.map((a) => `
+              <tr>
+                <td>${esc(merchantLabel(a.merchantId))}</td>
+                <td>${esc(fmtDate.format(parseDay(a.desde)))}</td>
+                <td>${esc(fmtDate.format(parseDay(a.hasta)))}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table></div>`
+      : '<div class="empty">Este POS no ha estado asignado a otro comercio antes.</div>'}`;
+    openModal(`Historial de asignación · ${esc(p.id)}`, body,
+      '<button class="btn" data-modal-close>Cerrar</button>');
   }
 
   function openPointForm(p) {
@@ -2031,7 +2083,10 @@
             </select>
           </label>
           <label>Banco<select id="pf-bank">${opt(POINT_BANKS, p.bank)}</select></label>
-          <label>Dispositivo<select id="pf-device">${opt(POINT_DEVICES, p.deviceType)}</select></label>
+          <label>Dispositivo
+            <input id="pf-device" list="pf-device-list" value="${esc(p.deviceType || "")}" placeholder="Ej: POS Android" autocomplete="off">
+            <datalist id="pf-device-list">${POINT_DEVICES.map((d) => `<option value="${esc(d)}"></option>`).join("")}</datalist>
+          </label>
           <label>Serial<input id="pf-serial" value="${esc(p.serial || "")}" placeholder="SN-000000"></label>
           <label>Estado<select id="pf-status">${opt(POINT_STATUSES, p.status)}</select></label>
         </div>
@@ -2047,7 +2102,7 @@
       ...(existing || {}),
       merchantId: $("#pf-merchant").value || null,
       bank: $("#pf-bank").value,
-      deviceType: $("#pf-device").value,
+      deviceType: $("#pf-device").value.trim(),
       serial: $("#pf-serial").value.trim(),
       status: $("#pf-status").value,
     };
@@ -2192,6 +2247,7 @@
       intlVol: Number($("#c-intl-vol").value) || 0,
       intlTx: Number($("#c-intl-tx").value) || 0,
       pfRate: (Number($("#c-pf-rate").value) || 0) / 100,
+      pfIntlRate: (Number($("#c-pf-intl-rate").value) || 0) / 100,
       pfFee: Number($("#c-pf-fee").value) || 0,
     };
     const res = await api("/api/profitability/calculate", {
@@ -2237,7 +2293,7 @@
       <div class="calc-summary">
         <span>Volumen total <b>${moneyC(res.totalVol)}</b></span>
         <span>Transacciones <b>${int(res.totalTx)}</b></span>
-        <span>Pricing PF <b>${ratePct(res.pfRate)} + ${moneyC(res.pfFee)}/trx</b></span>
+        <span>Comisión PF <b>${ratePct(res.pfRate)} nac · ${ratePct(res.pfIntlRate)} int + ${moneyC(res.pfFee)}/trx</b></span>
         <span>Ingreso PF <b>${moneyC(res.pfRevenue)}</b></span>
       </div>`;
 
@@ -2343,7 +2399,7 @@
       <div class="rule-item">
         <div class="rule-body">
           <div class="rule-name">${esc(r.name)}</div>
-          <div class="rule-desc">${esc(conditionLabel(r.condition))} · umbral ${r.threshold}${r.drCode ? ` · código ${esc(r.drCode)}` : ""}</div>
+          <div class="rule-desc">${esc(conditionLabel(r.condition))} · ${isPctCondition(r.condition) ? `porcentaje ${r.threshold}%` : `cantidad ${r.threshold}`}${r.drCode ? ` · código ${esc(r.drCode)}` : ""}</div>
           <div class="rule-tags">
             ${r.standard ? chip("Regla estándar", "neutral") : chip("Personalizada", "neutral")}
             ${r.scope === "MERCHANT" ? chip(merchantLabel(r.merchantId), "neutral") : chip("Global", "neutral")}
@@ -2354,7 +2410,7 @@
           <input type="checkbox" data-toggle="${esc(r.id)}" ${r.enabled ? "checked" : ""}>
           <span class="track"></span>
         </label>
-        ${r.standard ? "" : `<button class="btn btn-ghost" data-del="${esc(r.id)}" title="Eliminar">✕</button>`}
+        <button class="btn btn-ghost" data-del="${esc(r.id)}" title="Eliminar regla">✕</button>
       </div>`).join("");
 
     document.querySelectorAll("[data-toggle]").forEach((sw) => {
@@ -2370,6 +2426,9 @@
 
     document.querySelectorAll("[data-del]").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        const rule = rules.find((r) => r.id === btn.dataset.del);
+        // las estándar vienen preconfiguradas: confirmamos antes de quitarlas
+        if (rule && rule.standard && !confirm(`"${rule.name}" es una regla estándar. ¿Eliminarla de todos modos?`)) return;
         await api(`/api/alert-rules/${encodeURIComponent(btn.dataset.del)}`, { method: "DELETE" });
         loadRules();
       });
@@ -2399,7 +2458,7 @@
     });
     $("#rule-form").reset();
     $("#r-merchant-wrap").hidden = true;
-    $("#r-drcode-wrap").hidden = true;
+    syncRuleCondition();
     loadRulesAndPlans();
   }
 

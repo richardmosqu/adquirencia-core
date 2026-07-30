@@ -29,7 +29,6 @@ public class Credential {
     private String contrasena;
     private String tarjetas;        // "MC, VISA, AMEX"
     private String monedas;         // "USD"
-    private String pwAdminSite;
     private boolean threeDs;
 
     // Control de pruebas por marca: estado "Pendiente" | "OK" | "Falló" + código
@@ -77,8 +76,6 @@ public class Credential {
     public void setTarjetas(String tarjetas) { this.tarjetas = tarjetas; }
     public String getMonedas() { return monedas; }
     public void setMonedas(String monedas) { this.monedas = monedas; }
-    public String getPwAdminSite() { return pwAdminSite; }
-    public void setPwAdminSite(String pwAdminSite) { this.pwAdminSite = pwAdminSite; }
     public boolean isThreeDs() { return threeDs; }
     public void setThreeDs(boolean threeDs) { this.threeDs = threeDs; }
     public String getPruebaMc() { return pruebaMc; }

@@ -5,7 +5,6 @@ public enum ServiceType {
     AUTH_CAPTURE("Auth/Capture"),
     RECURRENCIA("Recurrencia"),
     LINK_PAGO("Link de pago"),
-    CHECKOUT("Checkout"),
     API("API");
 
     private final String label;

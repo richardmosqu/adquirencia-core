@@ -14,7 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>Modelo de negocio (todos los montos en USD):</p>
  * <ul>
- *   <li>Ingreso PF = volumen total * tasa PF + trx totales * fee fijo PF.</li>
+ *   <li>Ingreso PF = volNac * tasa PF nacional + volInt * tasa PF internacional
+ *       + trx totales * fee fijo PF.</li>
  *   <li>Costo adquirente = volNac * tasaNac + volInt * tasaInt
  *       + trx totales * fee por trx + fijo mensual.</li>
  *   <li>Ganancia = Ingreso PF − Costo adquirente.</li>
@@ -66,12 +67,15 @@ public class ProfitabilityService {
 
     // ---------- cálculo de rentabilidad ----------
 
-    /** Datos del comercio prospecto y el pricing de PF a evaluar. */
+    /**
+     * Datos del comercio prospecto y el pricing de PF a evaluar.
+     * {@code pfRate} es la comisión nacional y {@code pfIntlRate} la internacional.
+     */
     public record CalcRequest(
             String merchantName,
             double natVol, double natTx,
             double intlVol, double intlTx,
-            Double pfRate, Double pfFee) {
+            Double pfRate, Double pfIntlRate, Double pfFee) {
     }
 
     /** Fila comparativa por adquirente. */
@@ -85,17 +89,19 @@ public class ProfitabilityService {
     public record CalcResponse(
             String merchantName,
             double totalVol, double totalTx,
-            double pfRate, double pfFee, double pfRevenue,
+            double pfRate, double pfIntlRate, double pfFee, double pfRevenue,
             List<AcquirerResult> rows) {
     }
 
     public CalcResponse calculate(CalcRequest req) {
         double pfRate = req.pfRate() != null ? req.pfRate() : 0.035;
+        // si no se envía, la comisión internacional se asume igual a la nacional
+        double pfIntlRate = req.pfIntlRate() != null ? req.pfIntlRate() : pfRate;
         double pfFee = req.pfFee() != null ? req.pfFee() : 0.50;
 
         double totalVol = req.natVol() + req.intlVol();
         double totalTx = req.natTx() + req.intlTx();
-        double pfRevenue = totalVol * pfRate + totalTx * pfFee;
+        double pfRevenue = req.natVol() * pfRate + req.intlVol() * pfIntlRate + totalTx * pfFee;
 
         List<AcquirerResult> rows = store.acquirers().stream()
                 .map(a -> {
@@ -114,6 +120,6 @@ public class ProfitabilityService {
                 .toList();
 
         return new CalcResponse(req.merchantName(), totalVol, totalTx,
-                pfRate, pfFee, pfRevenue, rows);
+                pfRate, pfIntlRate, pfFee, pfRevenue, rows);
     }
 }

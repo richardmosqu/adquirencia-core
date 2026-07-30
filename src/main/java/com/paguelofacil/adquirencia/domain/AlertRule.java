@@ -10,13 +10,13 @@ public class AlertRule {
     public enum Scope { GLOBAL, MERCHANT }
 
     public enum Condition {
-        REJECT_RATE_ABOVE("Tasa de rechazo mayor a umbral (%)"),
-        DECLINED_COUNT_ABOVE("Cantidad de rechazadas en el día mayor a umbral"),
-        REFUND_RATE_ABOVE("Índice de reembolsos mayor a umbral (%)"),
-        THREE_DS_FAILURE_RATE_ABOVE("Fallas 3DS mayores a umbral (%)"),
-        DR_CODE_RECURRENT("Código DR recurrente supera umbral de ocurrencias"),
-        CHANNEL_VOLUME_DROP("Caída de volumen de un canal mayor a umbral (%)"),
-        INTERNAL_ERRORS_ABOVE("Errores internos / configuración mayores a umbral");
+        REJECT_RATE_ABOVE("Tasa de rechazo mayor al porcentaje (%)"),
+        DECLINED_COUNT_ABOVE("Cantidad de rechazadas en el día mayor a la cantidad"),
+        REFUND_RATE_ABOVE("Índice de reembolsos mayor al porcentaje (%)"),
+        THREE_DS_FAILURE_RATE_ABOVE("Fallas 3DS mayores al porcentaje (%)"),
+        DR_CODE_RECURRENT("Código de rechazo recurrente supera la cantidad de ocurrencias"),
+        CHANNEL_VOLUME_DROP("Caída de volumen de un canal mayor al porcentaje (%)"),
+        INTERNAL_ERRORS_ABOVE("Errores internos / configuración mayores a la cantidad");
 
         private final String label;
 
