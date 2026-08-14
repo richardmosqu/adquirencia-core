@@ -760,7 +760,8 @@ img { max-width: 100%; display: block; }
 
 @media (min-width: 1040px) {
   .cards-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .stats   { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* seis cifras: 3 por fila cierra parejo, 4 dejaría una fila coja */
+  .stats   { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pains   { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .verbs   { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .mods    { grid-template-columns: repeat(4, minmax(0, 1fr)); }
