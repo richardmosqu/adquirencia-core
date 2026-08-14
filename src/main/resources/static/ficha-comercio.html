@@ -2,13 +2,13 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#175E1A">
   <title>Ficha de datos del comercio · PagueloFacil</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/svg+xml"
-        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%236BBE22'/%3E%3Cpath d='M16 6a10 10 0 1 0 10 10h-5a5 5 0 1 1-5-5z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="img/simbolo-pf.svg">
   <style>
     :root {
       --green-500: #6BBE22;
@@ -53,13 +53,11 @@
       padding: 24px 30px;
       border-bottom: 3px solid var(--green-500);
     }
-    .logo-mark { width: 34px; height: 34px; }
-    .brand { flex: 1; }
-    .brand .name { font-size: 20px; font-weight: 700; }
-    .brand .tag {
+    .logo-mark { height: 28px; width: auto; display: block; }
+    .tag {
       font-size: 12px; font-weight: 600; color: var(--green-800);
       background: var(--green-100); border-radius: 999px; padding: 3px 10px;
-      display: inline-block; margin-top: 2px;
+      display: inline-block;
     }
     .sheet-body { padding: 26px 30px 30px; }
     .sheet-body > .intro {
@@ -108,6 +106,17 @@
       font-size: 11.5px; color: var(--muted);
     }
     @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+    @media (max-width: 700px) {
+      body { padding: 14px 10px 40px; }
+      .sheet { border-radius: 14px; }
+      .sheet-head { padding: 16px; }
+      .sheet-body { padding: 18px 14px 22px; }
+      h1 { font-size: 19px; }
+      /* iOS acerca la pantalla al enfocar un campo con menos de 16px */
+      input, select, textarea { font-size: 16px; padding: 11px 13px; }
+      .btn { width: 100%; padding: 13px 20px; font-size: 15px; }
+      .actions { flex-direction: column; }
+    }
     @media print {
       body { background: #fff; padding: 0; }
       .sheet { box-shadow: none; max-width: 100%; }
@@ -118,14 +127,8 @@
 <body>
   <form class="sheet" id="ficha">
     <header class="sheet-head">
-      <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true">
-        <circle cx="16" cy="16" r="14" fill="#6BBE22"/>
-        <path d="M16 6a10 10 0 1 0 10 10h-5a5 5 0 1 1-5-5z" fill="#ffffff"/>
-      </svg>
-      <div class="brand">
-        <div class="name">PagueloFacil</div>
-        <span class="tag">Core de Adquirencia</span>
-      </div>
+      <img class="logo-mark" src="img/logo-pf.svg" alt="PagueloFacil">
+      <span class="tag">Core de Adquirencia</span>
     </header>
 
     <div class="sheet-body">

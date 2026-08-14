@@ -134,6 +134,8 @@ body {
     "topbar"
     "content";
   height: 100vh;
+  /* dvh sigue a la barra del navegador móvil: evita el corte inferior en iOS */
+  height: 100dvh;
 }
 
 /* Encabezado minimizado: la barra superior se oculta y aparece un botón flotante */
@@ -171,8 +173,8 @@ body {
 }
 .icon-btn:hover { background: var(--plane); }
 
-.logout-btn { gap: 6px; text-decoration: none; color: var(--ink-2); font-size: 13px; font-weight: 500; }
-.logout-btn:hover { color: var(--status-critical-txt); background: var(--red-100); }
+.home-btn { gap: 6px; text-decoration: none; color: var(--ink-2); font-size: 13px; font-weight: 500; }
+.home-btn:hover { color: var(--pf-green-dark); background: var(--pf-green-100); }
 
 .avatar {
   background: var(--pf-green);
@@ -1339,20 +1341,164 @@ table.data a, .link, table.data .cell-link {
 @media (max-width: 1080px) {
   .kpis.kpis-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rules-layout { grid-template-columns: 1fr; }
+  /* minmax(0, …) y no 1fr: un track "1fr" nunca baja del min-content de su
+     contenido y ahí es donde la columna se salía de la pantalla. */
+  .rules-layout { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* ============================================================
+   MÓVIL (<= 720px)
+   El Core se usa desde el teléfono: una sola columna, objetivos
+   táctiles cómodos, tablas en tarjetas y modales tipo hoja
+   inferior. Los campos van a 16px porque iOS hace zoom al enfocar
+   cualquier campo con tipografía menor.
+   ============================================================ */
+
 @media (max-width: 720px) {
-  .content { padding: 20px 16px calc(var(--dock-h) + 30px); }
+  .content { padding: 18px 14px calc(var(--dock-h) + 34px); }
   .topbar { padding: 0 12px; }
-  .topbar-left, .topbar-right { gap: 10px; }
-  .updated, .logo-tag, .topbar-user-name, .logout-label { display: none; }
-  .kpis, .kpis.kpis-row { grid-template-columns: 1fr; }
-  .grid-2, .grid-3 { grid-template-columns: 1fr; }
-  .alert-banner { flex-wrap: wrap; }
+  .topbar-left, .topbar-right { gap: 8px; }
+  .updated, .logo-tag, .home-label { display: none; }
+  .logo-img { height: 26px; }
+
+  .kpis, .kpis.kpis-row { grid-template-columns: minmax(0, 1fr); }
+  .grid-2, .grid-3 { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .dash-block { margin-bottom: 24px; }
+  /* nada dentro de una tarjeta debe imponer su ancho mínimo a la pantalla */
+  .rule-item, .rule-body, .doc-card, .doc-card > div { min-width: 0; }
+  .rule-item { flex-wrap: wrap; }
+  .rule-tags .chip { white-space: normal; }
+
+  .panel { padding: 18px 16px; }
+  .panel-title { font-size: 18px; }
+  .card { padding: 18px 16px; }
+
+  /* --- Encabezado de vista y filtros: apilados y a todo el ancho --- */
+  .view-head { align-items: stretch; gap: 14px; margin-bottom: 18px; }
+  .filters { width: 100%; flex-direction: column; align-items: stretch; gap: 12px; }
+  .view-head .filters { justify-content: flex-start; }
+  .filter { width: 100%; }
+  .filters select,
+  .filters input[type="date"],
+  .table-toolbar select,
+  .cred-toolbar select,
+  .rule-form-card input,
+  .rule-form-card select,
+  .rule-form-card textarea,
+  .calc-grid input,
+  .compare-add input,
+  .task-add input,
+  .cred-form-grid input,
+  .cred-form-grid select,
+  .cred-form-grid textarea,
+  .obs-add textarea,
+  .op-input input {
+    width: 100%;
+    min-width: 0;
+    font-size: 16px;   /* < 16px hace que iOS acerque la pantalla al enfocar */
+    padding: 11px 13px;
+  }
+  .range-inputs { width: 100%; }
+  .range-inputs input { min-width: 0; flex: 1; }
+
+  /* --- Botones y objetivos táctiles --- */
+  .btn { padding: 11px 18px; font-size: 14px; }
+  .btn-sm { padding: 8px 14px; font-size: 13px; }
+  .icon-btn { padding: 8px; }
+
+  .calc-actions { flex-direction: column; }
+  .calc-actions .btn { width: 100%; }
   .calc-grid { grid-template-columns: 1fr; }
-  .view-head { align-items: stretch; }
-  .filters { width: 100%; }
+  .cred-form-grid { grid-template-columns: 1fr; }
+
+  .cred-toolbar { gap: 10px; }
+  .cred-toolbar .btn-primary { margin-left: 0; width: 100%; }
+  .cred-toolbar select { width: 100%; }
+  .view-switch { width: 100%; }
+  .view-switch .seg { flex: 1; }
+
+  /* --- Banner y cabeceras de detalle: apilados --- */
+  .alert-banner { flex-wrap: wrap; padding: 14px; }
+  .alert-banner .btn { width: 100%; }
+  .ad-header, .cred-detail-head { flex-direction: column; align-items: stretch; gap: 12px; }
+  .cdh-actions .btn { flex: 1; }
+  .ad-title { font-size: 19px; }
+  .refund-banner { flex-direction: column; align-items: stretch; gap: 10px; }
+  .ver-head { flex-direction: column; align-items: flex-start; }
+
+  .alert-list { max-height: none; }
+  .alert-head { flex-direction: column; }
+  .alert-head .btn { align-self: flex-start; }
+
+  /* --- Tablas como tarjetas: cada fila se lee de arriba abajo --- */
+  .table-wrap { overflow-x: visible; }
+  table.data thead { display: none; }
+  table.data, table.data tbody, table.data tr, table.data td { display: block; width: 100%; }
+  table.data tr {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 4px 2px;
+    margin-bottom: 10px;
+  }
+  table.data td {
+    border: 0;
+    padding: 8px 12px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    text-align: right;
+  }
+  /* la cabecera de la columna viaja en data-label (la pone app.js) */
+  table.data td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  table.data td:not([data-label]),
+  table.data td[data-label=""] { justify-content: flex-end; }
+  table.data td[data-label=""]::before { content: none; }
+  table.data td .btn { width: 100%; }
+  /* en la tarjeta el valor manda al ancho: las píldoras largas ya pueden partir */
+  table.data td .dr-action, table.data td .chip { white-space: normal; }
+  table.data td code { word-break: break-all; }
+  .calc-table tr.top-row td { background: transparent; }
+  .calc-table tr.top-row { border-color: var(--pf-green); background: var(--pf-green-100); }
+
+  /* --- Modales: hoja inferior a pantalla casi completa --- */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal {
+    max-width: 100%;
+    max-height: 92dvh;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .modal-head { padding: 16px; }
+  .modal-body { padding: 16px; }
+  .modal-foot {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    flex-direction: column-reverse;
+  }
+  .modal-foot .btn { width: 100%; }
+
+  /* --- Gráficas y comparador --- */
+  .donut-chart { gap: 14px; }
+  .compare-add { flex-direction: column; }
+  .compare-add .btn { width: 100%; }
+
+  /* --- Kanban y stepper: desplazamiento horizontal explícito --- */
+  .kanban { gap: 10px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+  .kanban-col { flex: 0 0 78vw; min-width: 78vw; scroll-snap-align: start; }
+  .stepper { -webkit-overflow-scrolling: touch; }
+
+  .ad-grid { grid-template-columns: 1fr; gap: 14px; }
+  .brand-tests { grid-template-columns: 1fr; }
+  .cred-fields { grid-template-columns: 1fr; }
 
   /* Dock: barra inferior de ancho completo, desplazable en horizontal.
      Se ocultan las etiquetas y quedan solo los íconos para que quepan. */
@@ -1362,11 +1508,18 @@ table.data a, .link, table.data .cell-link {
     width: 100%;
     max-width: 100%;
     border-radius: 16px 16px 0 0;
-    padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
     gap: 2px;
-    justify-content: space-around;
+    justify-content: space-between;
     overflow-x: auto;
   }
-  .dock-item { min-width: 52px; padding: 8px; }
+  .dock-item { min-width: 0; flex: 1; padding: 9px 4px; }
   .dock-label { display: none; }
+}
+
+/* Teléfonos angostos (<= 380px): el dock aún debe caber sin arrastrar */
+@media (max-width: 380px) {
+  .dock-ico svg { width: 20px; height: 20px; }
+  .dock-item { padding: 9px 2px; }
+  .kpi .kpi-value { font-size: 26px; }
 }

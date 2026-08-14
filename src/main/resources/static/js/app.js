@@ -55,6 +55,7 @@
     merchants: [],
     drCodes: {},
     compareSelection: [],
+    summary: null,
     alerts: [],
     actionPlans: [],
     credentials: [],
@@ -87,6 +88,36 @@
   const esc = (s) => String(s ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+
+  // Mismo corte que el CSS: por debajo de 720px estamos en teléfono y el
+  // layout pasa a una columna (tablas en tarjetas, gráficas más estrechas).
+  const NARROW = window.matchMedia("(max-width: 720px)");
+  const isNarrow = () => NARROW.matches;
+
+  /**
+   * En móvil las tablas se muestran como tarjetas y cada celda necesita
+   * llevar encima el nombre de su columna. En vez de tocar cada render, se
+   * copia el texto del <th> a data-label de cada <td> cuando la tabla entra
+   * al DOM; el CSS lo pinta con ::before.
+   */
+  function labelTable(table) {
+    const heads = [...table.querySelectorAll("thead th")].map((th) => th.textContent.trim());
+    if (!heads.length) return;
+    table.querySelectorAll("tbody tr").forEach((tr) => {
+      [...tr.children].forEach((td, i) => td.setAttribute("data-label", heads[i] ?? ""));
+    });
+  }
+
+  function watchTables() {
+    const label = (root) => {
+      if (root.matches && root.matches("table.data")) labelTable(root);
+      if (root.querySelectorAll) root.querySelectorAll("table.data").forEach(labelTable);
+    };
+    label(document.body);
+    new MutationObserver((records) => {
+      records.forEach((r) => r.addedNodes.forEach((n) => { if (n.nodeType === 1) label(n); }));
+    }).observe(document.body, { childList: true, subtree: true });
+  }
 
   async function api(path, opts) {
     const res = await fetch(path, opts);
@@ -157,6 +188,15 @@
     return el;
   }
 
+  /** 12 500 → "12,5K". En móvil el eje no tiene ancho para el número completo. */
+  function compactNum(v) {
+    v = Number(v || 0);
+    const a = Math.abs(v);
+    if (a >= 1e6) return (v / 1e6).toLocaleString("es-PA", { maximumFractionDigits: 1 }) + "M";
+    if (a >= 1e3) return (v / 1e3).toLocaleString("es-PA", { maximumFractionDigits: 1 }) + "K";
+    return int(v);
+  }
+
   function niceMax(v) {
     if (v <= 0) return 1;
     const exp = Math.pow(10, Math.floor(Math.log10(v)));
@@ -170,7 +210,12 @@
     container.innerHTML = "";
     if (!daily.length) { container.innerHTML = '<div class="empty">Aún no hay datos en este periodo. Prueba con otro rango.</div>'; return; }
 
-    const W = 820, H = 250, ml = 58, mr = 14, mt = 12, mb = 30;
+    // En móvil el lienzo se estrecha y la tipografía crece: al escalar el SVG
+    // a un ancho de teléfono, un 11 del lienzo grande queda ilegible.
+    const sm = isNarrow();
+    const W = sm ? 380 : 820, H = sm ? 230 : 250;
+    const ml = sm ? 44 : 58, mr = sm ? 10 : 14, mt = 12, mb = sm ? 28 : 30;
+    const fs = sm ? 14 : 11;
     const iw = W - ml - mr, ih = H - mt - mb;
     const values = daily.map((d) => Number(d.volume));
     const max = niceMax(Math.max(...values));
@@ -183,15 +228,20 @@
     for (let g = 0; g <= 4; g++) {
       const gy = mt + (ih * g) / 4;
       svg.append(svgEl("line", { x1: ml, x2: W - mr, y1: gy, y2: gy, stroke: CHART.grid, "stroke-width": 1 }));
-      const t = svgEl("text", { x: ml - 8, y: gy + 4, "text-anchor": "end", "font-size": 11, fill: CHART.axis });
-      t.textContent = int(max * (1 - g / 4));
+      const t = svgEl("text", { x: ml - 6, y: gy + 4, "text-anchor": "end", "font-size": fs, fill: CHART.axis });
+      t.textContent = sm ? compactNum(max * (1 - g / 4)) : int(max * (1 - g / 4));
       svg.append(t);
     }
 
-    const step = Math.max(1, Math.ceil(daily.length / 7));
+    const step = Math.max(1, Math.ceil(daily.length / (sm ? 3 : 7)));
+    const lastIdx = daily.length - 1;
+    // la última fecha solo se dibuja si no queda pegada a la anterior
+    const showLast = lastIdx % step >= step * 0.6;
     daily.forEach((d, i) => {
-      if (i % step !== 0 && i !== daily.length - 1) return;
-      const t = svgEl("text", { x: x(i), y: H - 8, "text-anchor": "middle", "font-size": 11, fill: CHART.axis });
+      if (i % step !== 0 && !(i === lastIdx && showLast)) return;
+      const last = i === lastIdx;
+      const t = svgEl("text", { x: x(i), y: H - 8, "text-anchor": last ? "end" : (i === 0 ? "start" : "middle"),
+        "font-size": fs, fill: CHART.axis });
       t.textContent = fmtDay.format(parseDay(d.date));
       svg.append(t);
     });
@@ -206,8 +256,9 @@
     const dot = svgEl("circle", { r: 4.5, fill: SERIES[0], stroke: "#fff", "stroke-width": 2, visibility: "hidden" });
     svg.append(cross, dot);
 
-    const overlay = svgEl("rect", { x: ml, y: mt, width: iw, height: ih, fill: "transparent" });
-    overlay.addEventListener("mousemove", (ev) => {
+    // pointer* cubre ratón y dedo con el mismo código (en móvil se arrastra)
+    const overlay = svgEl("rect", { x: ml, y: mt, width: iw, height: ih, fill: "transparent", style: "touch-action:pan-y" });
+    overlay.addEventListener("pointermove", (ev) => {
       const rect = svg.getBoundingClientRect();
       const px = ((ev.clientX - rect.left) / rect.width) * W;
       const i = Math.max(0, Math.min(daily.length - 1,
@@ -223,11 +274,14 @@
         `<div class="tt-muted">${int(d.txCount)} trx · ${int(d.approved)} aprobadas · ${int(d.declined)} rechazadas</div>`,
         ev.clientX, ev.clientY);
     });
-    overlay.addEventListener("mouseleave", () => {
+    const clearCross = () => {
       cross.setAttribute("visibility", "hidden");
       dot.setAttribute("visibility", "hidden");
       hideTooltip();
-    });
+    };
+    overlay.addEventListener("pointerleave", clearCross);
+    overlay.addEventListener("pointercancel", clearCross);
+    overlay.addEventListener("pointerup", clearCross);
     svg.append(overlay);
     container.append(svg);
   }
@@ -251,7 +305,9 @@
       container.append(lg);
     }
 
-    const W = width, rowH = 34, labelW = labelWidth, valueW = 74;
+    // lienzo angosto = móvil: se sube la tipografía porque el SVG se escala
+    const fs = width <= 420 ? 14 : 12;
+    const W = width, rowH = width <= 420 ? 38 : 34, labelW = labelWidth, valueW = width <= 420 ? 86 : 74;
     const H = items.length * rowH + 6;
     const max = niceMax(Math.max(...items.map((i) => i.value)));
     const bw = W - labelW - valueW - 10;
@@ -260,7 +316,7 @@
 
     items.forEach((item, idx) => {
       const cy = idx * rowH + rowH / 2 + 3;
-      const label = svgEl("text", { x: labelW - 8, y: cy + 4, "text-anchor": "end", "font-size": 12, fill: CHART.barLabel });
+      const label = svgEl("text", { x: labelW - 8, y: cy + 4, "text-anchor": "end", "font-size": fs, fill: CHART.barLabel });
       label.textContent = item.label;
       svg.append(label);
 
@@ -272,16 +328,17 @@
       const bar = svgEl("path", { d, fill: item.color });
       svg.append(bar);
 
-      const val = svgEl("text", { x: labelW + w + 8, y: cy + 4, "font-size": 12, "font-weight": 600, fill: CHART.barValue });
+      const val = svgEl("text", { x: labelW + w + 8, y: cy + 4, "font-size": fs, "font-weight": 600, fill: CHART.barValue });
       val.textContent = item.display + valueSuffix;
       svg.append(val);
 
       const hit = svgEl("rect", { x: 0, y: idx * rowH + 3, width: W, height: rowH - 2, fill: "transparent" });
       if (item.tooltip) {
-        hit.addEventListener("mousemove", (ev) => showTooltip(item.tooltip, ev.clientX, ev.clientY));
-        hit.addEventListener("mouseleave", hideTooltip);
-        bar.addEventListener("mousemove", (ev) => showTooltip(item.tooltip, ev.clientX, ev.clientY));
-        bar.addEventListener("mouseleave", hideTooltip);
+        [hit, bar].forEach((el) => {
+          el.addEventListener("pointermove", (ev) => showTooltip(item.tooltip, ev.clientX, ev.clientY));
+          el.addEventListener("pointerleave", hideTooltip);
+          el.addEventListener("pointerup", hideTooltip);
+        });
       }
       svg.append(hit);
     });
@@ -312,6 +369,7 @@
     Object.entries(drCodes).forEach(([code, desc]) => dSel.append(new Option(`${code} — ${desc}`, code)));
 
     setupCompare();
+    watchTables();
     wireEvents();
     switchView("dashboard");
     await loadDashboard();
@@ -388,6 +446,19 @@
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape" && !$("#modal-root").hidden) closeModal();
     });
+
+    // Al girar el teléfono cambia el lienzo de las gráficas: se redibujan
+    // con los datos que ya tenemos, sin volver a pedirlos al servidor.
+    const onBreakpoint = () => {
+      if (!state.summary) return;
+      lineChart($("#chart-volume"), state.summary.daily);
+      renderProcessors(state.summary);
+      renderServices(state.summary);
+      render3ds(state.summary);
+      renderCompare();
+    };
+    if (NARROW.addEventListener) NARROW.addEventListener("change", onBreakpoint);
+    else NARROW.addListener(onBreakpoint);   // Safari antiguo
 
     $("#calc-form").addEventListener("submit", onCalcSubmit);
     $("#calc-reset").addEventListener("click", () => { $("#calc-result").innerHTML = ""; });
@@ -493,6 +564,7 @@
       api("/api/alerts"),
     ]);
     state.alerts = alerts;
+    state.summary = summary;   // se reutiliza al redibujar por cambio de tamaño
     renderKpis(summary, alerts);
     renderAlertBanner(alerts);
     renderAlerts(alerts);
@@ -811,8 +883,10 @@
         `<div>${int(seg.count)} trx · <b>${pct(frac * 100)}</b> del total</div>` +
         (seg.valueLabel ? `<div class="tt-muted">${seg.valueLabel}</div>` : "");
       const enter = (ev) => { g.style.transform = `translate(${dx}px, ${dy}px)`; showTooltip(tip, ev.clientX, ev.clientY); };
-      g.addEventListener("mousemove", enter);
-      g.addEventListener("mouseleave", () => { g.style.transform = ""; hideTooltip(); });
+      const leave = () => { g.style.transform = ""; hideTooltip(); };
+      g.addEventListener("pointermove", enter);
+      g.addEventListener("pointerleave", leave);
+      g.addEventListener("pointercancel", leave);
       svg.append(g);
       a0 = a1;
     });
@@ -1042,10 +1116,12 @@
     const colorById = {};
     state.compareSelection.forEach((id, i) => { colorById[id] = compareColor(i); });
 
+    const sm = isNarrow();
+    const cut = sm ? 14 : 22;
     hBars(chartEl, rows.map((r) => {
       const full = nameId(r.merchantName, r.merchantId);
       return {
-        label: full.length > 22 ? full.slice(0, 21) + "…" : full,
+        label: full.length > cut ? full.slice(0, cut - 1) + "…" : full,
         value: Number(r.volume),
         display: money(r.volume),
         color: colorById[r.merchantId],
@@ -1053,7 +1129,7 @@
           `<div>Volumen: <b>${moneyC(r.volume)}</b></div>` +
           `<div class="tt-muted">${int(r.txCount)} trx · ${pct(r.approvalRate)} aprobación · reembolsos ${pct(r.refundPct)}</div>`,
       };
-    }), { width: 620, labelWidth: 178 });
+    }), sm ? { width: 340, labelWidth: 104 } : { width: 620, labelWidth: 178 });
 
     tableEl.innerHTML = `
       <div class="table-wrap"><table class="data">

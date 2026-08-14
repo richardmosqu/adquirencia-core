@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#175E1A">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Core de Adquirencia · PagueloFacil</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="icon" type="image/svg+xml" href="img/simbolo-pf.svg">
+</head>
+<body>
+  <div class="app">
+
+    <!-- ===================== TOPBAR ===================== -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <a class="logo" href="/" aria-label="Volver al inicio">
+          <img class="logo-img" src="img/logo-pf.svg" alt="PagueloFacil">
+          <span class="logo-tag">Core de Adquirencia</span>
+        </a>
+      </div>
+      <div class="topbar-right">
+        <span class="updated" id="last-updated"></span>
+        <a id="alert-pill" class="alert-pill" href="#" hidden title="Ver alertas" data-view="alert-config">
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M8 1.5 15 14H1L8 1.5zm-.75 4.5v4h1.5V6h-1.5zm0 5.25v1.5h1.5v-1.5h-1.5z"/></svg>
+          <span id="alert-pill-count"></span>
+        </a>
+        <a class="icon-btn home-btn" href="/" title="Volver a la presentación" aria-label="Volver a la presentación">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 3 3 10.5V21h6v-6h6v6h6V10.5L12 3z"/></svg>
+          <span class="home-label">Presentación</span>
+        </a>
+        <button class="icon-btn header-toggle" id="header-toggle" type="button" title="Minimizar encabezado" aria-label="Minimizar encabezado">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6 15.6 12 9.6l6 6L16.6 17 12 12.4 7.4 17z"/></svg>
+        </button>
+      </div>
+    </header>
+    <button class="header-restore" id="header-restore" type="button" title="Mostrar encabezado" aria-label="Mostrar encabezado" hidden>
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6 9.6 12 15.6l6-6L16.6 8 12 12.6 7.4 8z"/></svg>
+    </button>
+
+    <!-- ===================== CONTENIDO ===================== -->
+    <main class="content">
+      <!-- DASHBOARD -->
+      <section id="view-dashboard" class="view">
+        <div class="view-head">
+          <div>
+            <h1 class="panel-title">Monitoreo de procesamiento</h1>
+            <p class="view-sub">Qué está pasando ahora mismo con nuestras transacciones.</p>
+          </div>
+          <div class="filters" id="filters">
+            <div class="filter">
+              <label for="f-range">Periodo</label>
+              <select id="f-range">
+                <option value="today">Hoy</option>
+                <option value="7">Últimos 7 días</option>
+                <option value="30" selected>Últimos 30 días</option>
+                <option value="90">Últimos 90 días</option>
+                <option value="mtd">Mes actual</option>
+                <option value="custom">Rango personalizado…</option>
+              </select>
+            </div>
+            <div class="filter">
+              <label for="f-service">Servicio</label>
+              <select id="f-service">
+                <option value="">Todos los servicios</option>
+              </select>
+            </div>
+            <div class="filter" id="f-custom" hidden>
+              <label>Rango</label>
+              <div class="range-inputs">
+                <input type="date" id="f-from" aria-label="Desde">
+                <span>—</span>
+                <input type="date" id="f-to" aria-label="Hasta">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BLOQUE 0 — Banner de alerta a todo el ancho, arriba de todo -->
+        <div id="alert-banner"></div>
+
+        <!-- BLOQUE 1 — Indicadores clave: 4 KPIs en una sola fila -->
+        <div class="dash-block">
+          <div class="block-label">Indicadores clave</div>
+          <div class="kpis kpis-row" id="kpis"></div>
+        </div>
+
+        <!-- BLOQUE 2 — Alertas de procesamiento, debajo de los KPIs -->
+        <div class="dash-block">
+          <div class="block-label">Alertas de procesamiento</div>
+          <article class="card">
+            <header class="card-head">
+              <h2>Qué está pasando ahora</h2>
+              <span class="card-sub" id="alert-count-sub"></span>
+            </header>
+            <div class="alert-list alert-list-wide" id="alert-list"></div>
+          </article>
+        </div>
+
+        <!-- BLOQUE 2 — Serie principal de volumen -->
+        <div class="dash-block">
+          <div class="block-label">Volumen</div>
+          <article class="card">
+            <header class="card-head">
+              <h2>Volumen procesado por día</h2>
+              <span class="card-sub" id="volume-range-label"></span>
+            </header>
+            <div class="chart" id="chart-volume"></div>
+          </article>
+        </div>
+
+        <!-- BLOQUE 3 — Desglose de procesamiento (secundario) -->
+        <div class="dash-block">
+          <div class="block-label">Desglose de procesamiento</div>
+          <div class="grid grid-3">
+            <article class="card">
+              <header class="card-head"><h2>Procesamiento por canal</h2><span class="card-sub">PowerTranz vs. Evertec · vs. periodo anterior</span></header>
+              <div class="chart donut-chart" id="chart-processors"></div>
+            </article>
+            <article class="card">
+              <header class="card-head"><h2>Servicios</h2><span class="card-sub">volumen aprobado</span></header>
+              <div class="chart" id="chart-services"></div>
+            </article>
+            <article class="card">
+              <header class="card-head"><h2>3DS vs. sin 3DS</h2><span class="card-sub">tasa de aprobación</span></header>
+              <div class="chart" id="chart-3ds"></div>
+            </article>
+          </div>
+        </div>
+
+        <!-- BLOQUE 4 — Detalle -->
+        <div class="dash-block">
+          <div class="block-label">Detalle</div>
+          <div class="grid grid-2">
+            <article class="card">
+              <header class="card-head"><h2>Códigos de rechazo más frecuentes</h2><span class="card-sub">sobre rechazos del periodo</span></header>
+              <div id="dr-table"></div>
+            </article>
+            <article class="card">
+              <header class="card-head">
+                <h2>Comparar comercios</h2>
+                <span class="card-sub">agrega hasta 5</span>
+              </header>
+              <form class="compare-add" id="compare-add" autocomplete="off">
+                <input type="text" id="compare-input" list="merchant-list"
+                       placeholder="Nombre o ID del comercio (ej: Farmacia Vital o M-002)">
+                <datalist id="merchant-list"></datalist>
+                <button type="submit" class="btn btn-primary">Agregar</button>
+              </form>
+              <div class="compare-hint" id="compare-hint"></div>
+              <div class="compare-picker" id="compare-picker"></div>
+              <div class="chart" id="chart-compare"></div>
+              <div id="compare-table"></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROYECTOS -->
+      <section id="view-projects" class="view" hidden>
+        <div class="panel">
+          <h1 class="panel-title">Proyectos</h1>
+          <p class="view-sub">Crea, sigue y gestiona las iniciativas del área: responsables, fechas, prioridad, progreso, tareas y bitácora.</p>
+          <div class="cred-toolbar">
+            <div class="view-switch" role="tablist">
+              <button type="button" class="seg active" id="proj-view-table">Tabla</button>
+              <button type="button" class="seg" id="proj-view-kanban">Kanban</button>
+            </div>
+            <select id="proj-status-filter"><option value="">Todos los estados</option></select>
+            <select id="proj-resp-filter"><option value="">Todos los responsables</option></select>
+            <select id="proj-prio-filter"><option value="">Todas las prioridades</option></select>
+            <button type="button" class="btn btn-primary" id="proj-new">Agregar proyecto</button>
+          </div>
+          <div id="projects-body"></div>
+        </div>
+      </section>
+
+      <!-- DETALLE DE PROYECTO -->
+      <section id="view-project-detail" class="view" hidden>
+        <div id="project-detail"></div>
+      </section>
+
+      <!-- CREDENCIALES -->
+      <section id="view-credentials" class="view" hidden>
+        <div class="panel">
+          <h1 class="panel-title">Credenciales / DBAs</h1>
+          <p class="view-sub">Gestiona el ciclo de vida completo de cada credencial: desde que se solicita al banco hasta que se habilita en producción, con control de pruebas por marca.</p>
+          <div class="cred-toolbar">
+            <div class="view-switch" role="tablist">
+              <button type="button" class="seg active" id="cred-view-table">Tabla</button>
+              <button type="button" class="seg" id="cred-view-kanban">Kanban</button>
+            </div>
+            <select id="cred-status-filter"><option value="">Todos los estados</option></select>
+            <select id="cred-bank-filter"><option value="">Todos los bancos</option></select>
+            <select id="cred-merchant-filter"><option value="">Todos los comercios</option></select>
+            <label class="cred-refund-toggle">
+              <input type="checkbox" id="cred-refund-filter"> Reembolsos pendientes
+            </label>
+            <button type="button" class="btn btn-primary" id="cred-new">Nueva credencial</button>
+          </div>
+          <div id="credentials-body"></div>
+        </div>
+      </section>
+
+      <!-- DETALLE DE CREDENCIAL -->
+      <section id="view-cred-detail" class="view" hidden>
+        <div id="cred-detail"></div>
+      </section>
+
+      <!-- PUNTOS DE PAGO -->
+      <section id="view-points" class="view" hidden>
+        <div class="panel">
+          <h1 class="panel-title">Puntos de pago</h1>
+          <p class="view-sub">Tus POS y dispositivos por comercio y banco (Towerbank, BAC): estado y gestión a la mano.</p>
+          <div class="cred-toolbar">
+            <button type="button" class="btn btn-primary" id="point-new">Agregar POS</button>
+          </div>
+          <div id="points-table"></div>
+        </div>
+      </section>
+
+      <!-- DOCUMENTOS -->
+      <section id="view-documents" class="view" hidden>
+        <div class="panel">
+          <h1 class="panel-title">Documentos</h1>
+          <p class="view-sub">Todo lo que necesitas a la mano: códigos de rechazo, guías por procesador y procedimientos.</p>
+        </div>
+        <div id="documents-grid"></div>
+      </section>
+
+      <!-- RENTABILIDAD -->
+      <section id="view-profitability" class="view" hidden>
+        <div class="panel">
+          <h1 class="panel-title">Rentabilidad por adquirente</h1>
+          <p class="view-sub">Ingresa los datos del comercio prospecto y te decimos con qué adquirente conviene más afiliarlo. Comparamos a todos con tus costos actuales y resaltamos el más rentable.</p>
+        </div>
+
+        <!-- CALCULADORA -->
+        <div class="card calc-card">
+          <div class="card-head">
+            <h2>Datos del comercio prospecto</h2>
+            <span class="card-sub">montos en USD</span>
+          </div>
+          <form id="calc-form">
+            <div class="calc-grid">
+              <label class="calc-wide">Comercio (opcional)
+                <input type="text" id="c-name" placeholder="Ej: Boutique Marbella">
+              </label>
+
+              <div class="calc-section-label">Procesamiento nacional</div>
+              <label>Volumen nacional (USD)
+                <input type="number" id="c-nat-vol" min="0" step="any" value="0">
+              </label>
+              <label>Transacciones nacionales
+                <input type="number" id="c-nat-tx" min="0" step="1" value="0">
+              </label>
+
+              <div class="calc-section-label">Procesamiento internacional</div>
+              <label>Volumen internacional (USD)
+                <input type="number" id="c-intl-vol" min="0" step="any" value="0">
+              </label>
+              <label>Transacciones internacionales
+                <input type="number" id="c-intl-tx" min="0" step="1" value="0">
+              </label>
+
+              <div class="calc-section-label">Pricing PagueloFacil <span class="calc-hint">— por defecto 3.5% nacional, 4.5% internacional + $0.50 por trx</span></div>
+              <label>Tasa de comisión nacional (%)
+                <input type="number" id="c-pf-rate" min="0" step="any" value="3.5">
+              </label>
+              <label>Tasa de comisión internacional (%)
+                <input type="number" id="c-pf-intl-rate" min="0" step="any" value="4.5">
+              </label>
+              <label>Fee fijo PF por trx (USD)
+                <input type="number" id="c-pf-fee" min="0" step="any" value="0.50">
+              </label>
+            </div>
+            <div class="calc-actions">
+              <button type="submit" class="btn btn-primary">Calcular rentabilidad</button>
+              <button type="reset" class="btn" id="calc-reset">Limpiar</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="calc-result"></div>
+
+        <!-- GESTIÓN DE ADQUIRENTES -->
+        <div class="dash-block" style="margin-top:30px">
+          <div class="block-label">Adquirentes y sus costos</div>
+          <div class="rules-layout">
+            <div>
+              <h2 class="rules-title">Adquirentes definidos</h2>
+              <p class="view-sub" style="margin-bottom:12px">Cada adquirente nos reporta sus costos. Edítalos cuando cambien; cualquiera que agregues aparece automáticamente como opción en la comparación.</p>
+              <div id="acquirers-list"></div>
+            </div>
+            <div class="card rule-form-card">
+              <h2 class="rules-title" id="acq-form-title">Nuevo adquirente</h2>
+              <form id="acq-form">
+                <input type="hidden" id="a-id">
+                <label>Nombre
+                  <input type="text" id="a-name" required placeholder="Ej: PowerTranz">
+                </label>
+                <label>Costo nacional (%)
+                  <input type="number" id="a-nat-rate" min="0" step="any" required placeholder="Ej: 1.95">
+                </label>
+                <label>Costo internacional (%)
+                  <input type="number" id="a-intl-rate" min="0" step="any" required placeholder="Ej: 2.90">
+                </label>
+                <label>Costo fijo por transacción (USD)
+                  <input type="number" id="a-fee" min="0" step="any" required placeholder="Ej: 0.10">
+                </label>
+                <label>Costo fijo mensual (USD, opcional)
+                  <input type="number" id="a-monthly" min="0" step="any" value="0">
+                </label>
+                <div class="calc-actions">
+                  <button type="submit" class="btn btn-primary" id="acq-submit">Agregar adquirente</button>
+                  <button type="button" class="btn" id="acq-cancel" hidden>Cancelar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ALERTAS (CONFIG) -->
+      <section id="view-alert-config" class="view" hidden>
+        <div class="panel">
+          <h1 class="panel-title">Configuración de alertas</h1>
+          <p class="view-sub">Tú decides cómo te avisamos: reglas estándar para todo el procesamiento y reglas por comercio.</p>
+        </div>
+
+        <div class="rules-layout">
+          <div>
+            <h2 class="rules-title">Reglas activas</h2>
+            <div id="rules-list"></div>
+            <h2 class="rules-title" style="margin-top:24px">Planes de acción</h2>
+            <p class="view-sub" style="margin-bottom:12px">Cada regla se enlaza a un plan de acción. Estos son los planes disponibles para seleccionar.</p>
+            <div id="plans-list"></div>
+          </div>
+          <div class="rules-forms">
+            <div class="card rule-form-card">
+              <h2 class="rules-title">Nueva regla</h2>
+              <form id="rule-form">
+                <label>Nombre
+                  <input type="text" id="r-name" required placeholder="Ej: Rechazos altos en Hotel Casco Antiguo">
+                </label>
+                <label>Alcance
+                  <select id="r-scope">
+                    <option value="GLOBAL">Global (todo el procesamiento)</option>
+                    <option value="MERCHANT">Por comercio</option>
+                  </select>
+                </label>
+                <label id="r-merchant-wrap" hidden>Comercio
+                  <select id="r-merchant"></select>
+                </label>
+                <label>Condición
+                  <select id="r-condition"></select>
+                </label>
+                <label id="r-drcode-wrap" hidden>Código de rechazo
+                  <select id="r-drcode"></select>
+                </label>
+                <label><span id="r-threshold-label">Porcentaje (%)</span>
+                  <input type="number" id="r-threshold" min="1" step="1" value="20" required>
+                </label>
+                <label>Plan de acción
+                  <select id="r-actionplan" required></select>
+                </label>
+                <button type="submit" class="btn btn-primary">Crear regla</button>
+              </form>
+            </div>
+
+            <div class="card rule-form-card">
+              <h2 class="rules-title">Crear plan de acción</h2>
+              <p class="view-sub" style="margin-bottom:12px">Define una guía operativa que luego enlazas a una o varias reglas.</p>
+              <form id="ap-form">
+                <label>Nombre
+                  <input type="text" id="ap-name" required placeholder="Ej: Contención de rechazos">
+                </label>
+                <label>Descripción
+                  <input type="text" id="ap-desc" required placeholder="Resumen en una línea del plan">
+                </label>
+                <label>Pasos (uno por línea)
+                  <textarea id="ap-steps" rows="4" placeholder="Identificar los códigos de rechazo más frecuentes&#10;Contactar al comercio afectado&#10;Escalar al emisor o a PagueloFacil"></textarea>
+                </label>
+                <button type="submit" class="btn btn-primary">Crear plan de acción</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DETALLE DE ALERTA -->
+      <section id="view-alert-detail" class="view" hidden>
+        <div id="alert-detail"></div>
+      </section>
+    </main>
+
+    <!-- ===================== DOCK FLOTANTE (navegación) ===================== -->
+    <nav class="dock" aria-label="Navegación principal">
+      <button class="dock-item active" data-view="dashboard">
+        <span class="dock-ico">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 3h8v10H3V3zm10 0h8v6h-8V3zM3 15h8v6H3v-6zm10-4h8v10h-8V11z"/></svg>
+        </span>
+        <span class="dock-label">Dashboard</span>
+      </button>
+      <button class="dock-item" data-view="alert-config">
+        <span class="dock-ico">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a6 6 0 0 0-6 6c0 3.6-1 5-1.8 5.9-.5.5-.2 1.6.6 1.6h14.4c.8 0 1.1-1.1.6-1.6C19 13 18 11.6 18 8a6 6 0 0 0-6-6zm0 20a2.6 2.6 0 0 0 2.5-2h-5A2.6 2.6 0 0 0 12 22z"/></svg>
+        </span>
+        <span class="dock-label">Alertas</span>
+      </button>
+      <button class="dock-item" data-view="profitability">
+        <span class="dock-ico">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm1 3v3h10V5H7zm0 5v2h2v-2H7zm4 0v2h2v-2h-2zm4 0v6h2v-6h-2zM7 14v2h2v-2H7zm4 0v2h2v-2h-2zM7 18v2h6v-2H7z"/></svg>
+        </span>
+        <span class="dock-label">Rentabilidad</span>
+      </button>
+      <button class="dock-item" data-view="projects">
+        <span class="dock-ico">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M4 5h6l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm0 4v9h16V9H4z"/></svg>
+        </span>
+        <span class="dock-label">Proyectos</span>
+      </button>
+      <button class="dock-item" data-view="credentials">
+        <span class="dock-ico">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M14 2a6 6 0 0 0-5.7 8L2 16.3V22h5.7l.9-.9V19h2v-2h2l1.1-1.1A6 6 0 1 0 14 2zm2.5 3.5A1.5 1.5 0 1 1 15 7a1.5 1.5 0 0 1 1.5-1.5z"/></svg>
+        </span>
+        <span class="dock-label">Credenciales</span>
+      </button>
+      <button class="dock-item" data-view="points">
+        <span class="dock-ico">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 4v4h10V6H7zm1 7h2v2H8v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-8 4h2v2H8v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2z"/></svg>
+        </span>
+        <span class="dock-label">Puntos de pago</span>
+      </button>
+      <button class="dock-item" data-view="documents">
+        <span class="dock-ico">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 2h9l5 5v15H6V2zm8 1.5V8h4.5L14 3.5zM8 12h8v2H8v-2zm0 4h8v2H8v-2z"/></svg>
+        </span>
+        <span class="dock-label">Documentos</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="tooltip" class="tooltip" hidden></div>
+  <div id="modal-root" hidden></div>
+  <script src="js/app.js"></script>
+</body>
+</html>
