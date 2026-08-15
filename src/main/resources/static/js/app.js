@@ -2530,9 +2530,20 @@
 
   init().catch((err) => {
     console.error(err);
+    // La causa más común es una copia vieja guardada en el navegador: el
+    // botón recarga saltándose la caché para que el usuario no quede varado.
     document.body.insertAdjacentHTML("beforeend",
-      `<div style="position:fixed;bottom:12px;left:12px;background:var(--red-100);color:var(--red-700);padding:12px 16px;border-radius:12px;font-size:13px;max-width:340px;box-shadow:0 6px 20px rgba(20,30,40,.14)">` +
-      `Tuvimos un problema al cargar tus datos. Ya estamos en ello; vuelve a intentarlo en un momento.` +
-      `<span style="display:block;color:var(--muted);font-size:11.5px;margin-top:4px">${esc(err.message)}</span></div>`);
+      `<div id="boot-error" style="position:fixed;left:12px;right:12px;bottom:12px;z-index:80;background:var(--red-100);color:var(--red-700);padding:14px 16px;border-radius:14px;font-size:13.5px;max-width:420px;margin:0 auto;box-shadow:0 6px 20px rgba(20,30,40,.18)">` +
+      `<b>No pudimos cargar los datos.</b> Casi siempre se resuelve recargando la página.` +
+      `<button id="boot-retry" style="display:block;width:100%;margin-top:10px;font:inherit;font-weight:600;border:0;border-radius:999px;padding:10px 16px;background:var(--pf-green);color:#fff;cursor:pointer">Recargar</button>` +
+      `<span style="display:block;color:var(--muted);font-size:11.5px;margin-top:8px">${esc(err.message)}</span></div>`);
+    const retry = document.getElementById("boot-retry");
+    if (retry) {
+      retry.addEventListener("click", () => {
+        const u = new URL(location.href);
+        u.searchParams.set("r", Date.now());   // fuerza una descarga fresca
+        location.replace(u.toString());
+      });
+    }
   });
 })();
