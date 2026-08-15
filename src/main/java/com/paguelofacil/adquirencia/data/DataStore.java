@@ -459,16 +459,51 @@ public class DataStore {
     public static final String ST_HABILITADO = "Habilitado/Configurado";
 
     /**
-     * Sin credenciales de demostración: el módulo arranca vacío para gestionar
-     * el ciclo de vida desde cero (crear cada credencial y avanzarla a mano).
+     * Un caso de ejemplo para que el módulo no arranque vacío y se vea cómo
+     * funciona el ciclo de vida. Queda en "Recibido", que es la etapa donde se
+     * registran las pruebas por marca y el reembolso pendiente: es la que más
+     * muestra de la herramienta.
      */
     private void seedCredentials(Random rnd) {
-        // Intencionalmente vacío.
+        Credential c = new Credential();
+        c.setId("CR-001");
+        c.setMerchantId("28716");                  // Hotel Casco Antiguo
+        c.setBank("BAC");
+        c.setProcessor(Processor.POWERTRANZ);
+        c.setAfiliado("BAC-88231045");
+        c.setFechaSolicitud(LocalDate.now().minusDays(12));
+        c.setStatus(ST_RECIBIDO);
+        c.setThreeDs(true);
+        c.setRebill(false);
+        c.setPowertranzId("PT-CASCO-4471");
+        c.setContrasena("Kv7#pQm2Ls9x");
+        c.setTarjetas("MC, VISA, AMEX");
+        c.setMonedas("USD");
+        c.setLimitePorTrx(2500);
+        c.setLimiteMensual(180000);
+        // Mastercard ya probó bien: por eso queda el reembolso pendiente.
+        c.setPruebaMc("OK");
+        c.setCodigoOperacionMc("AUTH_CAP-004518");
+        c.setPruebaVisa("Pendiente");
+        c.setPruebaAmex("Pendiente");
+        c.setReembolsosPruebas(false);
+        c.setNotas("Alta solicitada junto con la habilitación de 3DS.");
+        c.setObservaciones("El banco confirmó las credenciales por correo el mismo día.");
+        credentials.add(c);
     }
 
-    /** Sin puntos de pago de demostración: el módulo arranca vacío. */
+    /**
+     * Un POS de ejemplo, ya reasignado una vez, para que se vea el historial de
+     * a qué comercio estuvo asignado antes.
+     */
     private void seedPaymentPoints(Random rnd) {
-        // Intencionalmente vacío.
+        PaymentPoint p = new PaymentPoint("PP-001", "28714", "Towerbank",
+                "POS Android", "SN-4471209", "Operativo");
+        p.setAssignmentHistory(new ArrayList<>(List.of(
+                new PaymentPoint.Assignment("28721", LocalDate.now().minusMonths(8),
+                        LocalDate.now().minusMonths(2)),     // Ferretería El Tornillo
+                new PaymentPoint.Assignment("28714", LocalDate.now().minusMonths(2), null))));
+        paymentPoints.add(p);
     }
 
     private void seedDocuments() {

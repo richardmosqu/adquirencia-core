@@ -30,12 +30,6 @@
     barLabel: cssVar("--bar-label"),
     barValue: cssVar("--bar-value"),
   };
-  const SERVICES = [
-    { value: "AUTH_CAPTURE", label: "Auth/Capture" },
-    { value: "RECURRENCIA", label: "Recurrencia" },
-    { value: "LINK_PAGO", label: "Link de pago" },
-    { value: "API", label: "API" },
-  ];
   // pctBased: la condición se mide en porcentaje; si no, se mide en cantidad de
   // ocurrencias. De ahí sale la etiqueta del campo (Porcentaje / Cantidad).
   const CONDITIONS = [
@@ -356,9 +350,6 @@
     state.merchants = merchants;
     state.drCodes = drCodes;
 
-    const sSel = $("#f-service");
-    SERVICES.forEach((s) => sSel.append(new Option(s.label, s.value)));
-
     const rSel = $("#r-merchant");
     merchants.forEach((m) => rSel.append(new Option(`${m.name} (${m.id})`, m.id)));
 
@@ -404,7 +395,6 @@
       $("#f-custom").hidden = $("#f-range").value !== "custom";
       if ($("#f-range").value !== "custom") loadDashboard();
     });
-    $("#f-service").addEventListener("change", loadDashboard);
     $("#f-from").addEventListener("change", loadDashboard);
     $("#f-to").addEventListener("change", loadDashboard);
 
@@ -550,7 +540,6 @@
   function filterParams() {
     const { from, to } = currentRange();
     const p = new URLSearchParams();
-    if ($("#f-service").value) p.set("service", $("#f-service").value);
     if (from) p.set("from", from);
     if (to) p.set("to", to);
     return p;
@@ -1107,7 +1096,6 @@
     }
     const { from, to } = currentRange();
     const p = new URLSearchParams({ merchantIds: state.compareSelection.join(",") });
-    if ($("#f-service").value) p.set("service", $("#f-service").value);
     if (from) p.set("from", from);
     if (to) p.set("to", to);
     const rows = await api(`/api/dashboard/compare?${p}`);
